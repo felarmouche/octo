@@ -8,8 +8,7 @@ import com.felarmouche.octo.core.finder.FindException;
 import com.felarmouche.octo.core.finder.FinderI;
 import com.felarmouche.octo.core.notifier.NotifierException;
 import com.felarmouche.octo.core.notifier.NotifierI;
-import com.felarmouche.octo.core.shared.Fingerprint;
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,24 +20,27 @@ public class Search {
     private final FilterI filter;
     private final EvaluatorI evaluator;
     private final NotifierI notifier;
-    private HashMap<Fingerprint, Listing> last;
+    private final SearchSettings settings;
+    private final String listingType;
 
-    public Search(FinderI finder, FilterI filter, EvaluatorI evaluator, NotifierI notifier){
+    public Search(FinderI finder, FilterI filter, EvaluatorI evaluator, NotifierI notifier, SearchSettings settings, String listingType){
         this.finder = finder;
         this.filter = filter;
         this.evaluator = evaluator;
         this.notifier = notifier;
+        this.settings = settings;
+        this.listingType = listingType;
     }
 
     public void execute(){
         try {
-            List<Listing> found = finder.find();
+            List<Listing> found = finder.find( listingType );
             List<Listing> filtered = filter != null
                     ? filter.filter(found)
                     : found;
 
             // setVerdict() for each Listing
-            evaluator.evaluate(filtered);
+            evaluator.evaluate(filtered, settings );
             notifier.notify(filtered);
         } catch (FindException e ){
             log.error("Finding listings with finder {} failed with message: {}", e.getPluginId(), e.getMessage());

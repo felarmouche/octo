@@ -1,20 +1,18 @@
 package com.felarmouche.octo.plugins.finder;
 
+import com.felarmouche.octo.application.WebScraper;
 import com.felarmouche.octo.core.finder.BaseFinder;
 import com.felarmouche.octo.core.finder.FindException;
 import com.felarmouche.octo.core.shared.Fingerprint;
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.nodes.TextNode;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 @Slf4j
 public class KleinanzeigenFinder extends BaseFinder {
@@ -27,11 +25,11 @@ public class KleinanzeigenFinder extends BaseFinder {
     }
 
     @Override
-    public List<Listing> find() {
+    public <T> List<Listing> find(String convertTo) {
         List<Listing> listings = new ArrayList<>();
 
         for (int page = 1; page <= MAX_PAGES && listings.size() < getMaxListingsPerSearch(); page++) {
-            Elements ads = load(pageUrl(page)).select("article[data-adid]");
+            Elements ads = Objects.requireNonNull(WebScraper.load(pageUrl(page))).select("article[data-adid]");
             if (ads.isEmpty()) break;
 
             for (Element ad : ads) {
@@ -42,7 +40,7 @@ public class KleinanzeigenFinder extends BaseFinder {
                 String url = linkEl.absUrl("href");
                 String externalId = ad.attr("data-adid");
                 try {
-                    listings.add(fetchDetails(url, externalId));
+                    listings.add(KleinanzeigenListingConverter.convert(fetchDetails(url, externalId), convertTo));
                     Thread.sleep(500 + (long) (Math.random() * 1000)); // Drosselung gegen Blocking
                 } catch (FindException e) {
                     log.error("Error while fetching details for listing {} with Plugin '{}' : {}", url, PLUGIN_ID, e.getMessage());
@@ -56,8 +54,8 @@ public class KleinanzeigenFinder extends BaseFinder {
     }
 
     private Listing fetchDetails(String url, String externalId) {
-        Document doc = load(url);
-
+        Document doc = WebScraper.load(url);
+        if (doc == null) return null;
         String title = doc.select("#viewad-title").text();
 
         int price = parsePrice(doc.select("meta[itemprop=price]").attr("content"));
@@ -75,8 +73,31 @@ public class KleinanzeigenFinder extends BaseFinder {
                 .distinct()
                 .toList();
 
+        HashMap<String, String> productSpecificFields = parseProductSpecificFields(doc);
+
         Fingerprint fp = new Fingerprint(externalId, title, description, images);
-        return new Listing(externalId, title, description, images, LocalDateTime.now(), fp, price, url);
+        Listing listing = new Listing(externalId, title, description, images, LocalDateTime.now(), fp, price, url, productSpecificFields);
+        listing.setProductSpecificFields(productSpecificFields);
+        return listing;
+    }
+
+    private HashMap<String, String> parseProductSpecificFields(Document doc) {
+        HashMap<String, String> fields = new LinkedHashMap<>(); // Reihenfolge bleibt erhalten
+        for (Element li : doc.select("#viewad-details li")) {
+            Elements spans = li.children().select("span");
+            String key, value;
+            if (spans.size() >= 2) {                 // aktuelles Layout: <span>Key</span><span>Value</span>
+                key = spans.get(0).text();
+                value = spans.get(1).text();
+            } else if (spans.size() == 1) {          // älteres Layout: Key als Textknoten, Value im <span>
+                key = li.ownText();
+                value = spans.get(0).text();
+            } else continue;
+            key = key.replace(":", "").trim();
+            value = value.trim();
+            if (!key.isEmpty() && !value.isEmpty()) fields.put(key, value);
+        }
+        return fields;
     }
 
     private int parsePrice(String raw) {
@@ -88,16 +109,6 @@ public class KleinanzeigenFinder extends BaseFinder {
             return Integer.parseInt(digits);
         } catch (NumberFormatException e) {
             return 0;
-        }
-    }
-
-    private Document load(String url) {
-        try {
-            return Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36")
-                    .get();
-        } catch (IOException e) {
-            throw new FindException("Parsing Kleinanzeigen-HTML to Document via JSOUP failed with error: " + e.getMessage(), getId());
         }
     }
 

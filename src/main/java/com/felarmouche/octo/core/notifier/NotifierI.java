@@ -1,9 +1,8 @@
 package com.felarmouche.octo.core.notifier;
 
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 
 import java.util.List;
-import java.util.Set;
 
 public interface NotifierI {
 

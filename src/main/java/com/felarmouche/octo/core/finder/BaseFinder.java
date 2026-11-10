@@ -1,8 +1,7 @@
 package com.felarmouche.octo.core.finder;
 
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 import com.felarmouche.octo.core.shared.Plugin;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 import java.util.List;
@@ -19,6 +18,6 @@ public abstract class BaseFinder extends Plugin implements FinderI{
     }
 
     @Override
-    public abstract List<Listing> find();
+    public abstract <T> List<Listing> find( String convertTo);
 
 }

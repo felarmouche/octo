@@ -1,7 +1,7 @@
 package com.felarmouche.octo.core.filter;
 
 import com.felarmouche.octo.core.shared.Fingerprint;
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 import com.felarmouche.octo.core.shared.Plugin;
 
 import java.util.HashMap;

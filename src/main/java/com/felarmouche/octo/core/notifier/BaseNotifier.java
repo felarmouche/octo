@@ -1,6 +1,6 @@
 package com.felarmouche.octo.core.notifier;
 
-import com.felarmouche.octo.core.shared.Listing;
+import com.felarmouche.octo.core.shared.listing.Listing;
 import com.felarmouche.octo.core.shared.Plugin;
 import com.felarmouche.octo.core.shared.Verdict;
 import lombok.Getter;
