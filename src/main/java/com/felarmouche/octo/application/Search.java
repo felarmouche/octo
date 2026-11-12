@@ -34,6 +34,7 @@ public class Search {
 
     public void execute(){
         try {
+            log.info("Starting new search...");
             List<Listing> found = finder.find( listingType );
             List<Listing> filtered = filter != null
                     ? filter.filter(found)

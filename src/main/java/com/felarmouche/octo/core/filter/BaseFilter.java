@@ -11,10 +11,12 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public abstract class BaseFilter extends Plugin implements FilterI {
+public class BaseFilter extends Plugin implements FilterI {
 
-    public BaseFilter(String id) {
-        super(id);
+    private final static String PLUGIN_ID= "base-filter";
+
+    public BaseFilter() {
+        super(PLUGIN_ID);
     }
 
     @Override
@@ -23,20 +25,24 @@ public abstract class BaseFilter extends Plugin implements FilterI {
         return customFilter(dedupList);
     }
 
-    abstract public List<Listing> customFilter(Set<Listing> listings);
+
+    @Override
+    public List<Listing> customFilter(List<Listing> listings){
+        return listings;
+    };
 
     private Map<Fingerprint, Listing> last = new HashMap<>();
 
-    protected Set<Listing> removeDuplicates(List<Listing> found) {
-        Set<Listing> filtered = found.stream()
+    protected List<Listing> removeDuplicates(List<Listing> found) {
+        List<Listing> filtered = found.stream()
                 .filter(it -> !last.containsKey(it.getFingerprint()))
-                .collect(Collectors.toSet());
+                        .toList();
 
-        updateLast(filtered);
+        updateLast(found);
         return filtered;
     }
 
-    private void updateLast(Set<Listing> listings){
+    private void updateLast(List<Listing> listings){
         last = listings.stream()
                 .collect(Collectors.toMap(Listing::getFingerprint, Function.identity()));
     }

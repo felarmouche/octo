@@ -14,11 +14,8 @@ import com.felarmouche.octo.plugins.evaluator.rebuy.iphone.RebuyPhoneFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.OptionalInt;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -56,6 +53,7 @@ public class RebuyEvaluator extends BaseEvaluator {
 
         List<PhoneListing> qualified = RebuyPhoneFilter.filter(minMarginInCents, phones, catalog);
 
+        log.info("{} listings qualified by filter", qualified.size());
         Set<PhoneListing> qualifiedSet = Collections.newSetFromMap(new IdentityHashMap<>());
         qualifiedSet.addAll(qualified);
         phones.stream()
@@ -63,7 +61,14 @@ public class RebuyEvaluator extends BaseEvaluator {
                 .forEach(p -> p.setVerdict(new Verdict(Verdict.Decision.NO_BUY,
                         "Marge selbst im besten Zustand unter " + formatCents(minMarginInCents))));
 
+
+
         qualified.forEach(phone -> evaluateSafely(phone, catalog, minMarginInCents));
+        Map<Verdict.Decision, Long> byDecision = qualified.stream().collect(
+                Collectors.groupingBy( p ->  p.getVerdict().decision(), Collectors.counting())
+        );
+        log.info("listings qualified by AI: {}", byDecision);
+
     }
 
     private void evaluateSafely(PhoneListing phone, RebuyIPhoneCatalog catalog, int minMarginInCents) {
