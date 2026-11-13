@@ -2,6 +2,7 @@ package com.felarmouche.octo.plugins.evaluator.rebuy;
 
 import com.felarmouche.octo.application.SearchSettings;
 import com.felarmouche.octo.core.evaluator.BaseEvaluator;
+import com.felarmouche.octo.core.shared.Fingerprint;
 import com.felarmouche.octo.core.shared.Verdict;
 import com.felarmouche.octo.core.shared.listing.Listing;
 import com.felarmouche.octo.core.shared.listing.PhoneListing;
@@ -86,8 +87,17 @@ public class RebuyEvaluator extends BaseEvaluator {
         if (imageUrls == null || imageUrls.isEmpty()) {
             return new Verdict(Verdict.Decision.UNSURE, "Keine Fotos vorhanden");
         }
-
-        ConditionAssessment a = ai.assessCondition(phone, catalog);
+        ConditionAssessment a = null;
+        try {
+            a = ai.assessCondition(phone, catalog);
+        } catch(IllegalStateException e){
+            return new Verdict(Verdict.Decision.NOT_EVALUATABLE,
+                    "KI-Bewertung nicht möglich. Selbst prüfen!");
+        }
+        if( a == null ) {
+            return new Verdict(Verdict.Decision.NOT_EVALUATABLE,
+                    "KI-Bewertung nicht möglich. Selbst prüfen!");
+        }
         phone.setBatteryHealth(a.batteryCapacity());
         phone.setCondition(a.condition().toString());
         phone.setColor(a.color());

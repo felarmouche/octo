@@ -12,7 +12,8 @@ public record Verdict(Decision decision, String reason) {
     public enum Decision{
         BUY,
         NO_BUY,
-        UNSURE
+        UNSURE,
+        NOT_EVALUATABLE
     }
 
 }

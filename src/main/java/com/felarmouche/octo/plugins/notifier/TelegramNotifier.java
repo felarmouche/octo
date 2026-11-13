@@ -11,6 +11,7 @@ import org.springframework.web.util.HtmlUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,12 +28,14 @@ public class TelegramNotifier implements NotifierI {
     }
 
     @Override
-    public void notify(List<Listing> listings) {
+    public void notify(List<Listing> listings, Set<Verdict.Decision> notifyLevels) {
         if (listings == null || listings.isEmpty()) {
             return;
         }
-
-        for (Listing listing : listings) {
+        List<Listing> notify = listings.stream().
+                filter(it -> notifyLevels.contains(it.getVerdict().decision()))
+                .toList();
+        for (Listing listing : notify) {
             String message = formatListing(listing);
             sendHtmlMessage(message);
         }
@@ -85,6 +88,7 @@ public class TelegramNotifier implements NotifierI {
             case BUY -> "🔥 <b>TOP DEAL (KAUFEN)</b>";
             case UNSURE -> "🤔 <b>INTERESSANTES ANGEBOT (PRÜFEN)</b>";
             case NO_BUY -> "❌ <b>KEIN DEAL</b>";
+            case NOT_EVALUATABLE -> "↺ <b>ERNEUTE PRÜFUNG...</b>";
         };
     }
 

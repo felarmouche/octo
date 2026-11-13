@@ -12,13 +12,11 @@ import java.util.Set;
 @Getter
 @Setter
 public abstract class BaseNotifier extends Plugin implements NotifierI {
-    private Set<Verdict.Decision> notifyLevels;
-
     public BaseNotifier(String id) {
         super(id);
     }
 
     @Override
-    public abstract void notify(List<Listing> listings);
+    public abstract void notify(List<Listing> listings, Set<Verdict.Decision> notifyLevels);
 
 }

@@ -12,11 +12,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,31 +30,32 @@ public class GeminiRebuyIphoneAssessment {
 
     private static final String USER_TEMPLATE = """
             Bewerte den Zustand des Smartphones.
-
+            
             <verkaeuferangaben>
             Titel: {title}
             Beschreibung: {description}
             Preis: {price} Euro
             Produktdaten: {productSpecificFields}
             </verkaeuferangaben>
-
+            
             Farbe: Wähle genau eine aus [{colors}]. Falls nicht bestimmbar: {unknownColor}
             Speicher: Wähle genau einen aus [{memorySizes}]. Falls nicht bestimmbar: {unknownMemory}
             Akkukapazität: Bestimme sofern ersichtlich die Akkukapazität. Falls nicht bestimmbar: {unknownBatteryCapacity}
             """;
 
     private final ChatClient chatClient;
-    private final List<String> models;
+    private final String[] models;
     private final ListingImageLoader imageLoader;
+    private int currentModelIndex = 0;
 
     public GeminiRebuyIphoneAssessment(ChatClient.Builder builder,
                                        @Value("classpath:prompts/condition-inspector.st") Resource systemPrompt,
                                        GeminiFallbackProperties props,
                                        ListingImageLoader imageLoader) {
         this.chatClient = builder.defaultSystem(systemPrompt).build();
-        this.models = List.copyOf(props.fallbackModels());
+        this.models = props.fallbackModels().toArray(new String[0]);
         this.imageLoader = imageLoader;
-        if (models.isEmpty()) {
+        if (models.length < 1) {
             throw new IllegalStateException("Keine Gemini-Modelle konfiguriert");
         }
     }
@@ -84,10 +81,15 @@ public class GeminiRebuyIphoneAssessment {
         );
 
         RuntimeException lastError = null;
-        for (String model : models) {
+
+        boolean done = false;
+        ConditionAssessment result = null;
+        int maxIterations = models.length;
+        while (!done) {
+            String model = models[currentModelIndex];
             try {
                 long startTime = System.currentTimeMillis();
-                ConditionAssessment result = chatClient.prompt()
+                result = chatClient.prompt()
                         .user(u -> u.text(USER_TEMPLATE).params(params).media(imageArray))
                         .options(GoogleGenAiChatOptions.builder()
                                 .model(model))
@@ -95,21 +97,26 @@ public class GeminiRebuyIphoneAssessment {
                         .entity(ConditionAssessment.class, ChatClient.EntityParamSpec::useProviderStructuredOutput);
 
                 long endTime = System.currentTimeMillis();
-                long seconds = (endTime- startTime) / 1000;
+                long seconds = (endTime - startTime) / 1000;
                 if (result == null) {
                     throw new IllegalStateException("Leere Antwort von Modell " + model);
                 }
                 log.debug("Modell {} bewertet in {} Sekunden '{}': {}", model, seconds, phone.getTitle(), result);
-                return result;
+                done = true;
             } catch (RuntimeException e) {
                 if (!shouldTryNextModel(e)) {
                     throw e;
                 }
                 log.warn("Modell {} nicht verfügbar ({}), versuche nächstes", model, rootCauseMessage(e));
                 lastError = e;
+                updateModelIndex();
+                if (--maxIterations < 1) {
+                    throw new IllegalStateException("Alle Gemini-Modelle nicht verfügbar/Kontingente aufgebraucht", lastError);
+                }
             }
+
         }
-        throw new IllegalStateException("Alle Gemini-Modelle nicht verfügbar/Kontingente aufgebraucht", lastError);
+        return result;
     }
 
     private boolean shouldTryNextModel(Throwable e) {
@@ -146,5 +153,10 @@ public class GeminiRebuyIphoneAssessment {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+
+    private synchronized void updateModelIndex() {
+        currentModelIndex = (currentModelIndex + 1) % models.length;
     }
 }
