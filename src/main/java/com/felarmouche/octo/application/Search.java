@@ -42,11 +42,11 @@ public class Search {
             log.info("Starting new search...");
             List<Listing> found = finder.find(listingType);
 
-            updateLast(found);
-
             List<Listing> filtered = filter != null
                     ? filter.filter(found, last)
                     : found;
+
+            updateLast(found);
 
             // setVerdict() for each Listing
             evaluator.evaluate(filtered, settings);
