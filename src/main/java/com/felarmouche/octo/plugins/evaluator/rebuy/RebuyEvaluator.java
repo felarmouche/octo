@@ -78,7 +78,7 @@ public class RebuyEvaluator extends BaseEvaluator {
         } catch (RuntimeException e) {
             log.error("KI-Bewertung fehlgeschlagen für {}", phone.getTitle(), e);
             phone.setVerdict(new Verdict(Verdict.Decision.UNSURE,
-                    "KI-Bewertung fehlgeschlagen: " + e.getMessage()));
+                    "KI-Bewertung fehlgeschlagen: " + GeminiRebuyIphoneAssessment.rootCauseMessage(e)));
         }
     }
 
@@ -87,16 +87,13 @@ public class RebuyEvaluator extends BaseEvaluator {
         if (imageUrls == null || imageUrls.isEmpty()) {
             return new Verdict(Verdict.Decision.UNSURE, "Keine Fotos vorhanden");
         }
-        ConditionAssessment a = null;
+        ConditionAssessment a;
         try {
             a = ai.assessCondition(phone, catalog);
-        } catch(IllegalStateException e){
+        } catch (IllegalStateException e) {
+            log.warn("KI-Bewertung nicht möglich für {}: {}", phone.getTitle(), e.getMessage());
             return new Verdict(Verdict.Decision.NOT_EVALUATABLE,
-                    "KI-Bewertung nicht möglich. Selbst prüfen!");
-        }
-        if( a == null ) {
-            return new Verdict(Verdict.Decision.NOT_EVALUATABLE,
-                    "KI-Bewertung nicht möglich. Selbst prüfen!");
+                    "KI-Bewertung nicht möglich (" + e.getMessage() + "). Selbst prüfen!");
         }
         phone.setBatteryHealth(a.batteryCapacity());
         phone.setCondition(a.condition().toString());
