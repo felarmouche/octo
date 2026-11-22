@@ -45,10 +45,11 @@ public class SearchRun {
                         .or(() -> filterByType(search, listing))
                         .orElseGet(() -> evaluate(search, listing))))
                 .toList();
-        record(search.id(), judged);
+        record(search, judged);
         notify(search, judged, failures);
 
         RunStatus status = new RunStatus(clock.instant(), failures.isEmpty(), failures);
+        memory.saveStatus(search.id(), status);
         log.info("Search '{}' ran: {} found, {} new, ok={} {}",
                 search.name(), found.size(), fresh.size(), status.ok(), status.messages());
         return status;
@@ -101,10 +102,10 @@ public class SearchRun {
         }
     }
 
-    /** 6. Record: store every judged Listing, remember all Fingerprints except NOT_EVALUATABLE ones. */
-    private void record(String searchId, List<JudgedListing> judged) {
-        memory.record(searchId, judged);
-        memory.remember(searchId, judged.stream()
+    /** 6. Record: store every judged Listing and apply the retention rule, remember all Fingerprints except NOT_EVALUATABLE ones. */
+    private void record(Search search, List<JudgedListing> judged) {
+        memory.record(search.id(), judged, search.retention());
+        memory.remember(search.id(), judged.stream()
                 .filter(j -> j.verdict().decision() != Decision.NOT_EVALUATABLE)
                 .map(j -> j.listing().fingerprint())
                 .toList());

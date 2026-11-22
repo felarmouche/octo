@@ -1,5 +1,6 @@
 package com.felarmouche.octo.application.search;
 
+import com.felarmouche.octo.TestcontainersConfiguration;
 import com.felarmouche.octo.application.search.Search.FinderSlot;
 import com.felarmouche.octo.application.search.Search.NotifierSlot;
 import com.felarmouche.octo.core.domain.Alert;
@@ -22,7 +23,13 @@ import com.felarmouche.octo.types.phone.PhoneListingType;
 import com.felarmouche.octo.types.phone.Storage;
 import com.felarmouche.octo.types.generic.GenericFilterSettings;
 import com.felarmouche.octo.types.generic.GenericListingType;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.boot.jdbc.test.autoconfigure.JdbcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -40,12 +47,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
+/** The run of a Search against PostgreSQL. Each test runs in its own rolled-back transaction. */
+@JdbcTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import({TestcontainersConfiguration.class, JdbcSearchMemory.class})
 class SearchRunTest {
 
     private static final Instant NOW = Instant.parse("2026-11-22T10:00:00Z");
 
-    private final SearchMemory memory = new InMemorySearchMemory();
-    private final SearchRun run = new SearchRun(memory, Clock.fixed(NOW, ZoneOffset.UTC));
+    @Autowired
+    private JdbcClient jdbc;
+    @Autowired
+    private SearchMemory memory;
+    private SearchRun run;
+
+    @BeforeEach
+    void setUp() {
+        run = new SearchRun(memory, Clock.fixed(NOW, ZoneOffset.UTC));
+    }
 
     @Test
     void withoutEvaluatorEverySurvivorIsBuyAndAlerted() {
@@ -95,6 +114,56 @@ class SearchRunTest {
         run.run(search);
 
         assertThat(notifier.sent).extracting(a -> a.listing().title()).containsExactly("PS5 Disc", "DualSense");
+    }
+
+    @Test
+    void afterARestartListingsSeenBeforeAreNotAlertedAgain() {
+        var finder = new FakeFinder("ps5", List.of(listing("PS5 Disc", 240_00)));
+        var notifier = new RecordingNotifier();
+        Search search = search(List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY)));
+        run.run(search);
+
+        SearchRun afterRestart = new SearchRun(new JdbcSearchMemory(jdbc), Clock.fixed(NOW, ZoneOffset.UTC));
+        finder.listings = List.of(listing("PS5 Disc", 240_00), listing("DualSense", 40_00));
+        afterRestart.run(search);
+
+        assertThat(notifier.sent).extracting(a -> a.listing().title()).containsExactly("PS5 Disc", "DualSense");
+    }
+
+    @Test
+    void retentionKeepsTheNewestListingsAndWhatLeftTheHistoryStaysSeen() {
+        var finder = new FakeFinder("ps5", List.of(listing("A", 100_00), listing("B", 110_00), listing("C", 120_00)));
+        var notifier = new RecordingNotifier();
+        Search search = search(List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY)),
+                new Retention(Set.of(), Optional.of(2)));
+
+        run.run(search);
+        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("B", "C");
+
+        finder.listings = List.of(listing("A", 100_00), listing("D", 130_00)); // A left the history but was seen
+        run.run(search);
+
+        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("C", "D");
+        assertThat(notifier.sent).extracting(a -> a.listing().title()).containsExactly("A", "B", "C", "D");
+    }
+
+    @Test
+    void retentionCanKeepOnlyCertainDecisionsAndThenTheNewest() {
+        var finder = new FakeFinder("ps5", List.of(
+                listing("Gut 1", 100_00), listing("Teuer", 900_00), listing("Unklar", 200_00), listing("Gut 2", 110_00)));
+        var evaluator = new FakeEvaluator(l -> switch (l.title()) {
+            case "Teuer" -> new Verdict(Decision.NO_BUY, "zu teuer");
+            case "Unklar" -> new Verdict(Decision.UNSURE, "unklar");
+            default -> new Verdict(Decision.BUY, "gut");
+        });
+        Search search = new Search("search-1", "PS5",
+                new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE), ExclusionFilterSettings.NONE,
+                List.of(slot(finder)), Optional.of(slot(evaluator)), List.of(slot(new RecordingNotifier(), Decision.BUY)),
+                new Retention(Set.of(Decision.BUY, Decision.UNSURE), Optional.of(2)));
+
+        run.run(search);
+
+        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("Unklar", "Gut 2");
     }
 
     @Test
@@ -201,6 +270,22 @@ class SearchRunTest {
     }
 
     @Test
+    void theLastRunStatusIsStoredAndSurvivesARestart() {
+        var broken = new FakeFinder("broken-finder", List.of());
+        broken.failure = new PluginException("broken-finder", "Ergebnisseite nicht ladbar");
+        Search search = search(List.of(slot(broken)), Optional.empty(), List.of(slot(new RecordingNotifier(), Decision.BUY)));
+        assertThat(memory.lastStatus("search-1")).isEmpty();
+
+        RunStatus failed = run.run(search);
+        assertThat(new JdbcSearchMemory(jdbc).lastStatus("search-1")).contains(failed);
+
+        broken.failure = null;
+        run.run(search);
+        assertThat(new JdbcSearchMemory(jdbc).lastStatus("search-1"))
+                .contains(new RunStatus(NOW, true, List.of()));
+    }
+
+    @Test
     void problemsReportedByAFinderAreRecordedInTheRunStatus() {
         var finder = new FakeFinder("kleinanzeigen-finder", List.of(listing("PS5 Disc", 240_00)));
         finder.problems = List.of("Anzeige https://example.org/ad-9 übersprungen: HTTP 404");
@@ -239,7 +324,7 @@ class SearchRunTest {
         Search search = new Search("search-1", "PS5",
                 new Search.TypeSlot<>(new GenericListingType(),
                         new GenericFilterSettings(new PriceRange(100_00, 250_00))), ExclusionFilterSettings.NONE,
-                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY, Decision.NO_BUY)));
+                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY, Decision.NO_BUY)), Retention.KEEP_ALL);
 
         run.run(search);
 
@@ -319,6 +404,25 @@ class SearchRunTest {
     }
 
     @Test
+    void theListingHistoryKeepsPhoneAttributesAndVerdictDetails() {
+        var finder = new FakeFinder("phones", List.of(phoneListing("ad-1", "iPhone 13 128GB", "Akku 91 %",
+                new PhoneAttributes(Optional.empty(), Optional.of(new Battery(80, 100)), Optional.of("Blau"),
+                        Optional.of(PhoneCondition.VERY_GOOD)))));
+        var verdict = new Verdict(Decision.BUY, "gut", List.of(new LabelledValue("Rebuy zahlt", "310 €")));
+
+        run.run(phoneSearch(PhoneFilterSettings.NONE, finder, Optional.of(slot(new FakeEvaluator(l -> verdict))),
+                new RecordingNotifier()));
+
+        assertThat(memory.history("search-1")).singleElement().satisfies(judged -> {
+            assertThat(judged.listing().attributes()).contains(new PhoneAttributes(Optional.of(Storage.GB_128),
+                    Optional.of(Battery.exact(91)), Optional.of("Blau"), Optional.of(PhoneCondition.VERY_GOOD)));
+            assertThat(judged.listing().priceInCents()).contains(300_00);
+            assertThat(judged.listing().foundAt()).isEqualTo(NOW);
+            assertThat(judged.verdict()).isEqualTo(verdict);
+        });
+    }
+
+    @Test
     void exclusionRunsBeforeTheListingTypeFilterAndItsRejectionsAreRecordedAndRememberedAsSeen() {
         var finder = new FakeFinder("phones", List.of(
                 listing("iPhone 13", "Display gesprungen, Akkukapazität: 74 %", 300_00, "broken-and-weak"),
@@ -329,7 +433,7 @@ class SearchRunTest {
         Search search = new Search("search-1", "iPhone 13",
                 new Search.TypeSlot<>(new PhoneListingType(), new PhoneFilterSettings(null, 80, null, null)),
                 new ExclusionFilterSettings(List.of("Mietkauf"), Set.of("damage")),
-                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY)));
+                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY)), Retention.KEEP_ALL);
 
         run.run(search);
         run.run(search);
@@ -348,11 +452,11 @@ class SearchRunTest {
         var genericType = new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE);
 
         assertThatThrownBy(() -> new Search("search-1", "PS5", genericType,
-                new ExclusionFilterSettings(List.of(), Set.of("damage")), List.of(), Optional.empty(), List.of()))
+                new ExclusionFilterSettings(List.of(), Set.of("damage")), List.of(), Optional.empty(), List.of(), Retention.KEEP_ALL))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("damage");
         assertThatCode(() -> new Search("search-1", "PS5", genericType,
-                new ExclusionFilterSettings(List.of(), Set.of("wanted-swap")), List.of(), Optional.empty(), List.of()))
+                new ExclusionFilterSettings(List.of(), Set.of("wanted-swap")), List.of(), Optional.empty(), List.of(), Retention.KEEP_ALL))
                 .doesNotThrowAnyException();
     }
 
@@ -362,7 +466,7 @@ class SearchRunTest {
                                       Optional<Search.EvaluatorSlot<?>> evaluator, RecordingNotifier notifier) {
         return new Search("search-1", "iPhone 13", new Search.TypeSlot<>(new PhoneListingType(), filter),
                 ExclusionFilterSettings.NONE,
-                List.of(slot(finder)), evaluator, List.of(slot(notifier, Decision.BUY)));
+                List.of(slot(finder)), evaluator, List.of(slot(notifier, Decision.BUY)), Retention.KEEP_ALL);
     }
 
     static Listing phoneListing(String externalId, String description, PhoneAttributes mapped) {
@@ -386,9 +490,16 @@ class SearchRunTest {
     private static Search search(List<FinderSlot<?>> finders,
                                  Optional<Search.EvaluatorSlot<?>> evaluator,
                                  List<NotifierSlot<?>> notifiers) {
+        return search(finders, evaluator, notifiers, Retention.KEEP_ALL);
+    }
+
+    private static Search search(List<FinderSlot<?>> finders,
+                                 Optional<Search.EvaluatorSlot<?>> evaluator,
+                                 List<NotifierSlot<?>> notifiers,
+                                 Retention retention) {
         return new Search("search-1", "PS5 unter 250 €",
                 new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE), ExclusionFilterSettings.NONE,
-                finders, evaluator, notifiers);
+                finders, evaluator, notifiers, retention);
     }
 
     private static FinderSlot<?> slot(FakeFinder finder) {

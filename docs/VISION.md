@@ -2,7 +2,7 @@
 
 This document describes what Octo is meant to be: the idea, the rules we design by, how the user works with it, and how a Search runs. Terms in **bold** are defined in [`GLOSSARY.md`](../GLOSSARY.md).
 
-Much of the current code was built for testing (hardcoded Search, settings in `application.properties`, no persistence). Where code and this document disagree, this document describes the target. See [Gaps to the current code](#gaps-to-the-current-code).
+Much of the current code was built for testing (hardcoded Search, settings in `application.properties`). Where code and this document disagree, this document describes the target. See [Gaps to the current code](#gaps-to-the-current-code).
 
 ## The idea
 
@@ -142,5 +142,4 @@ Secrets are never committed.
 These are the places where the test setup differs from the target:
 
 - The Searches are built in code (`InCodeSearches`) and share one global interval, and the Telegram chat comes from one global property. Target: Searches come from storage, each with its own Schedule and its own Notifier settings.
-- What a Search has seen lives in memory and is lost on restart. Target: stored, along with the Listing History and last run status.
 - The Telegram bot token is committed in `application.properties`. Target: revoke it and load it from an environment variable.

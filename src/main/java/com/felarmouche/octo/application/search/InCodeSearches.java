@@ -25,11 +25,14 @@ import java.util.Set;
 @Component
 public class InCodeSearches {
 
-    private final SearchRun run = new SearchRun(new InMemorySearchMemory(), Clock.systemUTC());
+    private static final Retention NEWEST_200 = new Retention(Set.of(), Optional.of(200));
+
+    private final SearchRun run;
     private final List<Search> searches;
 
-    public InCodeSearches(KleinanzeigenFinder kleinanzeigen, RebuyEvaluator rebuy, TelegramNotifier telegram,
+    public InCodeSearches(SearchMemory memory, KleinanzeigenFinder kleinanzeigen, RebuyEvaluator rebuy, TelegramNotifier telegram,
                           @Value("${telegram.bot.chat-id}") String chatId) {
+        this.run = new SearchRun(memory, Clock.systemUTC());
         TelegramSettings chat = new TelegramSettings(chatId);
         Search iphone15 = new Search(
                 "iphone-15-rebuy",
@@ -41,7 +44,8 @@ public class InCodeSearches {
                         new KleinanzeigenSettings("https://www.kleinanzeigen.de/s-28359/preis:100:400/iphone-15/k0l29r50", 20))),
                 Optional.of(new Search.EvaluatorSlot<>(rebuy, new RebuySettings(
                         "https://www.rebuy.de/verkaufen/handy/apple/iphone-15-generation/iphone-15", 20_00, 0.7, 4))),
-                List.of(new Search.NotifierSlot<>(telegram, Set.of(Decision.BUY, Decision.UNSURE), chat)));
+                List.of(new Search.NotifierSlot<>(telegram, Set.of(Decision.BUY, Decision.UNSURE), chat)),
+                NEWEST_200);
         this.searches = List.of(iphone15);
     }
 

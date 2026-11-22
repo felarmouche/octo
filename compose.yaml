@@ -1,0 +1,33 @@
+# Octo and its PostgreSQL database: `docker compose up --build`.
+# GEMINI_API_KEY is taken from the shell or a local .env file (never committed).
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: octo
+      POSTGRES_USER: octo
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-octo}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U octo -d octo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  octo:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/octo
+      DB_USER: octo
+      DB_PASSWORD: ${DB_PASSWORD:-octo}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  postgres-data:

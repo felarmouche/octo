@@ -13,9 +13,9 @@ See spec "Persistence" and user stories 32, 72–73, 75, 82–83.
 
 **Status:** ready-for-agent
 
-- [ ] `docker compose up` starts Octo and PostgreSQL, and the schema is applied on startup
-- [ ] Restarting Octo doesn't re-alert Listings seen before the restart
-- [ ] Fingerprints stay remembered after their Listing was removed from the Listing History
-- [ ] NOT_EVALUATABLE Listings are recorded but not remembered as seen
-- [ ] Retention is applied after each run; filter rejections are recorded, Deduplication drops are not
-- [ ] Run-seam tests against PostgreSQL (Testcontainers)
+- [x] `docker compose up` starts Octo and PostgreSQL, and the schema is applied on startup
+- [x] Restarting Octo doesn't re-alert Listings seen before the restart
+- [x] Fingerprints stay remembered after their Listing was removed from the Listing History
+- [x] NOT_EVALUATABLE Listings are recorded but not remembered as seen
+- [x] Retention is applied after each run; filter rejections are recorded, Deduplication drops are not
+- [x] Run-seam tests against PostgreSQL (Testcontainers)

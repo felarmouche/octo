@@ -28,7 +28,8 @@ public record Search(
         ExclusionFilterSettings exclusionSettings,
         List<FinderSlot<?>> finders,
         Optional<EvaluatorSlot<?>> evaluator,
-        List<NotifierSlot<?>> notifiers) {
+        List<NotifierSlot<?>> notifiers,
+        Retention retention) {
 
     /** @throws IllegalArgumentException when a selected Exclusion Preset is not offered for the Listing Type */
     public Search {
@@ -39,6 +40,7 @@ public record Search(
         finders = List.copyOf(finders);
         evaluator = evaluator == null ? Optional.empty() : evaluator;
         notifiers = List.copyOf(notifiers);
+        retention = retention == null ? Retention.KEEP_ALL : retention;
     }
 
     /** The Exclusion Filter of this Search, built once per run. */

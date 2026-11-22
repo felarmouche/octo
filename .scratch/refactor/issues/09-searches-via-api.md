@@ -23,3 +23,7 @@ See spec "Search aggregate", "Plugin Settings mechanism" and "HTTP API", and use
 - [ ] Changing the Listing Type of an existing Search is refused
 - [ ] Notifier slots carry the Decisions they report
 - [ ] API-seam tests (Spring Boot + Testcontainers) cover the points above and authentication
+
+## Comments
+
+- From 08: `seen_fingerprint` and `listing_history` have no foreign key to `search` yet, because the in-code Searches get their `search` row only when the first run status is saved. When Searches are stored here, add `references search (id) on delete cascade` to both, so "deleted with the Search" holds in the schema.
