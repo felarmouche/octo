@@ -17,13 +17,13 @@ Regeln:
 - WICHTIG: Sei SEHR kritisch bei der Bewertung des Rebuy-Zustands und kategorisiere eher in die schlechtere Zustandskategorie!
 
 Funktionsfehler:
-Display-Störungen (Streifen, Flecken, Pixelfehler), defektes Face ID oder Touch ID, defekte Kamera oder ein Akku mit Hinweis "Service" passen in keine Kategorie. Liegt ein solcher Fehler vor (sichtbar oder vom Verkäufer genannt), beginne reasoning mit "FUNKTIONSFEHLER:", nenne den Fehler und setze confidence auf höchstens 0.3.
+Display-Störungen (Streifen, Flecken, Pixelfehler), defektes Face ID oder Touch ID, defekte Kamera oder ein Akku mit Hinweis "Service" passen in keine Kategorie. Liegt ein solcher Fehler vor (sichtbar oder vom Verkäufer genannt), setze functionalDefect auf true und nenne den Fehler in reasoning. Ansonsten setze functionalDefect auf false.
 
 confidence:
 - 0.9 bis 1.0: Display, Rückseite und Rahmen gut erkennbar, Kategorie eindeutig.
 - 0.7 bis 0.89: Einzelne Seiten fehlen oder sind unscharf, die Kategorie ist aber plausibel.
 - 0.4 bis 0.69: Wichtige Bereiche kaum beurteilbar oder Fotos und Verkäufertext widersprechen sich deutlich.
-- unter 0.4: Nur bei Funktionsfehlern oder wenn die Fotos offensichtlich nicht das angebotene Gerät zeigen.
+- unter 0.4: Nur wenn die Fotos offensichtlich nicht das angebotene Gerät zeigen.
 Fehlende Fotos allein sind kein Grund für eine confidence unter 0.7.
 
 reasoning: maximal 2 Sätze. Nenne das Bauteil, das die Kategorie bestimmt.

@@ -24,11 +24,11 @@ See spec "Rebuy Evaluator" and user stories 54–68.
 
 **Status:** ready-for-agent
 
-- [ ] The best plausible grade comes from the Phone Condition (VERY_GOOD → A1, GOOD → A2, OK → A3, else A0), not from marketplace wording
-- [ ] No AI call for Listings the pre-check rejects
-- [ ] Unloadable photos or all models failing → NOT_EVALUATABLE, retried when the Listing is found again
-- [ ] A Listing without a price never gets BUY
-- [ ] Verdict details include the assessed grade, the AI's colour/storage/battery, "Rebuy zahlt", "Einkauf" and "Gewinn" where they apply
-- [ ] The grade and the catalog variant are their own types; unused catalog lookups are removed
-- [ ] Tests: a decision table with a fake AI assessor and a catalog parsed from a saved Rebuy HTML fixture; two Reference Products don't evict each other's cache
-- [ ] The iPhone 15 Search (Kleinanzeigen + phone filter + damage preset + Rebuy + Telegram) runs on the new path
+- [x] The best plausible grade comes from the Phone Condition (VERY_GOOD → A1, GOOD → A2, OK → A3, else A0), not from marketplace wording
+- [x] No AI call for Listings the pre-check rejects
+- [x] Unloadable photos or all models failing → NOT_EVALUATABLE, retried when the Listing is found again
+- [x] A Listing without a price never gets BUY
+- [x] Verdict details include the assessed grade, the AI's colour/storage/battery, "Rebuy zahlt", "Einkauf" and "Gewinn" where they apply
+- [x] The grade and the catalog variant are their own types; unused catalog lookups are removed
+- [x] Tests: a decision table with a fake AI assessor and a catalog parsed from a saved Rebuy HTML fixture; two Reference Products don't evict each other's cache
+- [x] The iPhone 15 Search (Kleinanzeigen + phone filter + damage preset + Rebuy + Telegram) runs on the new path
