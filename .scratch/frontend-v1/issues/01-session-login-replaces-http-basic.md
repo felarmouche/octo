@@ -6,7 +6,7 @@ Spec: `octo_frontend/.scratch/frontend-v1/spec.md` (Backend changes, ADR-0002).
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Login with the right credentials sets the session cookie, and API calls with it succeed
 - [ ] Login with wrong credentials returns 401 after the delay, with a message that doesn't reveal which part was wrong
