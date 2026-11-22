@@ -11,7 +11,7 @@ Spec: `octo_frontend/.scratch/frontend-v1/spec.md` (Backend changes, API contrac
 
 **Blocked by:** 02 (uses the same schema generation and formats)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] The search-schema's fields have German titles and labelled enum values, and the window times have `format: "time"`
 - [ ] Decoding still accepts exactly what the schema describes (e.g. `"08:00"` for a window time)

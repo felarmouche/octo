@@ -11,7 +11,7 @@ Spec: `octo_frontend/.scratch/frontend-v1/spec.md` (Backend changes, API contrac
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Listing Types and Plugins each have a German `title`; adding a Plugin or Listing Type requires declaring one
 - [ ] The phone `exclusionSchema` offers exactly "Gesuche / Tausch" and "Schäden" as presets; generic offers only "Gesuche / Tausch"
