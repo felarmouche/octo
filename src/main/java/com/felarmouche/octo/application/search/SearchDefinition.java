@@ -16,7 +16,7 @@ import java.util.Set;
  *
  * @param evaluator null when the Search has no Evaluator
  */
-@JsonIgnoreProperties({"id", "active", "lastRun"})
+@JsonIgnoreProperties({"id", "active", "lastRun", "nextRun"})
 public record SearchDefinition(
         String name,
         String listingType,
@@ -25,6 +25,7 @@ public record SearchDefinition(
         List<Slot> finders,
         Slot evaluator,
         List<NotifierSlot> notifiers,
+        JsonNode schedule,
         JsonNode retention) {
 
     public SearchDefinition {

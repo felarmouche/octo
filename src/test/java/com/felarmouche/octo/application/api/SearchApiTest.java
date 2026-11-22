@@ -1,6 +1,7 @@
 package com.felarmouche.octo.application.api;
 
 import com.felarmouche.octo.TestcontainersConfiguration;
+import com.felarmouche.octo.application.search.SearchRunner;
 import com.felarmouche.octo.core.domain.Alert;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.listingtype.ListingType;
@@ -17,6 +18,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,13 +27,18 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,20 +47,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         "spring.security.user.name=" + SearchApiTest.USER,
         "spring.security.user.password=" + SearchApiTest.PASSWORD,
-        "octo.searches.first-run-after=P1D"})
+        "octo.scheduler.first-tick-after=P1D"})
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, SearchApiTest.FakePlugins.class})
+@Import({TestcontainersConfiguration.class, SearchApiTest.FakePlugins.class, SearchApiTest.TestClock.class})
 class SearchApiTest {
 
     static final String USER = "octo";
     static final String PASSWORD = "secret";
+    /** Monday 2026-11-23, 12:00 in Berlin. */
+    static final Instant MONDAY_NOON = Instant.parse("2026-11-23T11:00:00Z");
 
     @Autowired
     private MockMvcTester mvc;
     @Autowired
     private JdbcClient jdbc;
     @Autowired
-    private com.felarmouche.octo.application.search.SearchRunner runner;
+    private SearchRunner runner;
+    @Autowired
+    private MutableClock clock;
     @Autowired
     private FakeFinder finder;
     @Autowired
@@ -62,8 +73,9 @@ class SearchApiTest {
     @BeforeEach
     void setUp() {
         jdbc.sql("delete from search").update();
-        finder.offers.clear();
+        finder.reset();
         notifier.sent.clear();
+        clock.set(MONDAY_NOON);
     }
 
     @Test
@@ -99,13 +111,13 @@ class SearchApiTest {
 
         assertThat(post("/api/searches/" + id + "/pause", "")).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.active", v -> v.assertThat().isEqualTo(false));
-        runner.runAll();
+        runDue();
         assertThat(notifier.sent).isEmpty();
         assertThat(get("/api/searches/" + id)).bodyJson().hasPathSatisfying("$.lastRun", v -> v.assertThat().isNull());
 
         assertThat(post("/api/searches/" + id + "/resume", "")).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.active", v -> v.assertThat().isEqualTo(true));
-        runner.runAll();
+        runDue();
         assertThat(notifier.sentTitles()).containsExactly("PS5 Disc");
         assertThat(get("/api/searches/" + id)).bodyJson()
                 .hasPathSatisfying("$.lastRun.ok", v -> v.assertThat().isEqualTo(true));
@@ -115,7 +127,7 @@ class SearchApiTest {
     void anEditAppliesFromTheNextRunAndKeepsWhatTheSearchHasSeen() {
         String id = id(post("/api/searches", ps5Search("BUY")));
         finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00)));
-        runner.runAll();
+        runDue();
         notifier.sent.clear();
 
         // now also Listings above 250 € are rejected-and-reported as NO_BUY
@@ -123,7 +135,8 @@ class SearchApiTest {
         assertThat(put("/api/searches/" + id, edited)).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.name", v -> v.assertThat().isEqualTo("PS5"));
         finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00), listing("PS5 Pro", 600_00)));
-        runner.runAll();
+        clock.advance(Duration.ofMinutes(5));
+        runDue();
 
         assertThat(notifier.sentTitles()).containsExactly("PS5 Pro");
     }
@@ -136,7 +149,7 @@ class SearchApiTest {
         post("/api/searches", body);
         finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00), listing("PS5 defekt", 100_00)));
 
-        runner.runAll();
+        runDue();
 
         assertThat(notifier.sentTitles()).containsExactly("PS5 defekt");
     }
@@ -145,7 +158,7 @@ class SearchApiTest {
     void deletingASearchRemovesItsListingHistoryAndSeenFingerprints() {
         String id = id(post("/api/searches", ps5Search()));
         finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00)));
-        runner.runAll();
+        runDue();
         assertThat(rows("listing_history", id)).isEqualTo(1);
         assertThat(rows("seen_fingerprint", id)).isEqualTo(1);
 
@@ -244,7 +257,155 @@ class SearchApiTest {
         assertThat(delete("/api/searches/nope")).hasStatus(HttpStatus.NOT_FOUND);
     }
 
+    // --- Schedule ------------------------------------------------------------------------------
+
+    @Test
+    void theScheduleIsPartOfTheSearch() {
+        String body = ps5Search().replace("\"schedule\": {\"intervalMinutes\": 5}", """
+                "schedule": {"intervalMinutes": 10, "window": {"from": "11:00", "to": "17:00"},
+                             "weekdays": ["MONDAY", "FRIDAY"]}""");
+        String id = id(post("/api/searches", body));
+
+        assertThat(get("/api/searches/" + id)).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.schedule.intervalMinutes", v -> v.assertThat().isEqualTo(10))
+                .hasPathSatisfying("$.schedule.window.from", v -> v.assertThat().isEqualTo("11:00:00"))
+                .hasPathSatisfying("$.schedule.window.to", v -> v.assertThat().isEqualTo("17:00:00"))
+                .hasPathSatisfying("$.schedule.weekdays", v -> v.assertThat().asList()
+                        .containsExactlyInAnyOrder("MONDAY", "FRIDAY"));
+    }
+
+    @Test
+    void savingRefusesAnInvalidSchedule() {
+        assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5", "\"intervalMinutes\": 0")),
+                "schedule.intervalMinutes");
+        assertRefused(post("/api/searches", ps5Search().replace("\"schedule\": {\"intervalMinutes\": 5},", "")),
+                "schedule.intervalMinutes");
+        assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"window\": {\"from\": \"17:00\", \"to\": \"11:00\"}")), "schedule.window");
+        assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"weekdays\": [\"MONTAG\"]")), "schedule.weekdays[0]");
+    }
+
+    @Test
+    void aNewSearchRunsAtOnceAndThenAfterTheIntervalFromTheEndOfTheRun() {
+        String id = id(post("/api/searches", ps5Search()));
+        finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00)));
+
+        runDue();
+        assertThat(finder.calls).hasSize(1);
+        assertThat(get("/api/searches/" + id)).bodyJson()
+                .hasPathSatisfying("$.nextRun", v -> v.assertThat().isEqualTo("2026-11-23T11:05:00Z"));
+
+        clock.advance(Duration.ofMinutes(4));
+        runDue();
+        assertThat(finder.calls).hasSize(1);
+
+        clock.advance(Duration.ofMinutes(1));
+        runDue();
+        assertThat(finder.calls).hasSize(2);
+    }
+
+    @Test
+    void aSearchOutsideItsWindowWaitsForTheWindowToOpen() {
+        String body = ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"window\": {\"from\": \"14:00\", \"to\": \"17:00\"}");
+        String id = id(post("/api/searches", body));
+
+        runDue();
+        assertThat(finder.calls).isEmpty();
+        assertThat(get("/api/searches/" + id)).bodyJson()
+                .hasPathSatisfying("$.nextRun", v -> v.assertThat().isEqualTo("2026-11-23T13:00:00Z"));
+
+        clock.set(Instant.parse("2026-11-23T13:00:00Z"));
+        runDue();
+        assertThat(finder.calls).hasSize(1);
+    }
+
+    @Test
+    void aRunMissedWhileOctoWasDownOutsideTheWindowWaitsForTheWindow() {
+        String body = ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"window\": {\"from\": \"11:00\", \"to\": \"17:00\"}");
+        String id = id(post("/api/searches", body));
+        runDue();
+
+        // Octo comes back in the evening: the stored next run has passed, but the window is closed
+        clock.set(Instant.parse("2026-11-23T19:00:00Z"));
+        runDue();
+
+        assertThat(finder.calls).hasSize(1);
+        assertThat(get("/api/searches/" + id)).bodyJson()
+                .hasPathSatisfying("$.nextRun", v -> v.assertThat().isEqualTo("2026-11-24T10:00:00Z"));
+    }
+
+    @Test
+    void aResumedSearchIsDueAtOnce() {
+        String id = id(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5", "\"intervalMinutes\": 60")));
+        runDue();
+        post("/api/searches/" + id + "/pause", "");
+
+        clock.advance(Duration.ofMinutes(1));
+        post("/api/searches/" + id + "/resume", "");
+        runDue();
+
+        assertThat(finder.calls).hasSize(2);
+    }
+
+    @Test
+    void anEditedScheduleAppliesFromTheEndOfTheLastRun() {
+        String id = id(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5", "\"intervalMinutes\": 60")));
+        runDue();
+
+        put("/api/searches/" + id, ps5Search().replace("\"intervalMinutes\": 5", "\"intervalMinutes\": 10"));
+
+        assertThat(get("/api/searches/" + id)).bodyJson()
+                .hasPathSatisfying("$.nextRun", v -> v.assertThat().isEqualTo("2026-11-23T11:10:00Z"));
+    }
+
+    @Test
+    void aSlowSearchDoesNotDelayOthersAndNeverOverlapsItself() throws InterruptedException {
+        post("/api/searches", ps5Search());
+        post("/api/searches", ps5Search().replace("\"query\": \"ps5\"", "\"query\": \"slow\""));
+        finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00)));
+        CountDownLatch release = finder.blockOn("slow");
+
+        List<Thread> first = runner.startDue();
+        assertThat(first).hasSize(2);
+        awaitAlert();
+        assertThat(notifier.sentTitles()).containsExactly("PS5 Disc");
+
+        // the fast Search is due again; the slow one is still running and is not started twice
+        clock.advance(Duration.ofMinutes(5));
+        joinAll(runner.startDue());
+        assertThat(finder.calls).containsExactlyInAnyOrder("ps5", "slow", "ps5");
+
+        release.countDown();
+        joinAll(first);
+    }
+
     // --- helpers -------------------------------------------------------------------------------
+
+    /** One scheduler tick, waiting until the Searches it started have finished. */
+    private void runDue() {
+        joinAll(runner.startDue());
+    }
+
+    private static void joinAll(List<Thread> threads) {
+        for (Thread thread : threads) {
+            try {
+                assertThat(thread.join(Duration.ofSeconds(10))).as("run finished").isTrue();
+            } catch (InterruptedException e) {
+                throw new AssertionError(e);
+            }
+        }
+    }
+
+    private void awaitAlert() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (notifier.sent.isEmpty()) {
+            assertThat(System.nanoTime()).as("waiting for an Alert").isLessThan(deadline);
+            Thread.sleep(10);
+        }
+    }
 
     private static void assertRefused(MvcTestResult result, String field) {
         assertThat(result).hasStatus(HttpStatus.BAD_REQUEST).bodyJson()
@@ -269,6 +430,7 @@ class SearchApiTest {
                   "exclusion": {"words": ["defekt"]},
                   "finders": [{"plugin": "fake-finder", "settings": {"query": "ps5"}}],
                   "notifiers": [{"plugin": "recording-notifier", "decisions": [%s], "settings": {"channel": "me"}}],
+                  "schedule": {"intervalMinutes": 5},
                   "retention": {"newest": 50}
                 }""".formatted(quoted(decisions));
     }
@@ -327,12 +489,36 @@ class SearchApiTest {
     record FakeFinderSettings(@NotBlank String query) {
     }
 
-    /** Offers, per query, the Listings a test put there. */
+    /** Offers, per query, the Listings a test put there, and records the queries it was asked. */
     static class FakeFinder implements Finder<FakeFinderSettings> {
         final Map<String, List<Listing>> offers = new ConcurrentHashMap<>();
+        final List<String> calls = new CopyOnWriteArrayList<>();
+        private final Map<String, CountDownLatch> blocked = new ConcurrentHashMap<>();
+
+        void reset() {
+            offers.clear();
+            calls.clear();
+            blocked.clear();
+        }
+
+        /** Finding for this query waits until the returned latch is released. */
+        CountDownLatch blockOn(String query) {
+            CountDownLatch latch = new CountDownLatch(1);
+            blocked.put(query, latch);
+            return latch;
+        }
 
         @Override
         public Result find(FakeFinderSettings settings, ListingType<?> listingType) {
+            calls.add(settings.query());
+            CountDownLatch latch = blocked.get(settings.query());
+            if (latch != null) {
+                try {
+                    latch.await(10, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             return Result.of(offers.getOrDefault(settings.query(), List.of()));
         }
 
@@ -375,6 +561,51 @@ class SearchApiTest {
         @Override
         public Class<RecordingSettings> settingsType() {
             return RecordingSettings.class;
+        }
+    }
+
+    // --- the clock -------------------------------------------------------------------------------
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestClock {
+        @Bean
+        @Primary
+        MutableClock mutableClock() {
+            return new MutableClock(MONDAY_NOON, ZoneId.of("Europe/Berlin"));
+        }
+    }
+
+    /** A clock in the global timezone that tests set and advance. */
+    static class MutableClock extends Clock {
+        private volatile Instant now;
+        private final ZoneId zone;
+
+        MutableClock(Instant now, ZoneId zone) {
+            this.now = now;
+            this.zone = zone;
+        }
+
+        void set(Instant instant) {
+            now = instant;
+        }
+
+        void advance(Duration duration) {
+            now = now.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return zone;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Instant instant() {
+            return now;
         }
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -22,8 +23,10 @@ import java.util.UUID;
 
 /**
  * Creates, edits, pauses, resumes and deletes stored Searches. Saving refuses unknown Plugins, Plugins of the
- * wrong kind or Listing Type, invalid settings, and Searches without a Finder or a Notifier.
+ * wrong kind or Listing Type, invalid settings or Schedule, and Searches without a Finder or a Notifier.
  * A Search is stored in its normalised form, so what is read back is what runs.
+ *
+ * It also plans when each Search runs next, in the timezone of the clock.
  */
 @Service
 public class SearchService {
@@ -33,40 +36,91 @@ public class SearchService {
     private final PluginRegistry plugins;
     private final ListingTypes listingTypes;
     private final SettingsCodec codec;
-    private final Clock clock = Clock.systemUTC();
+    private final SearchMemory memory;
+    private final Clock clock;
 
     SearchService(SearchRepository repository, JdbcAggregateTemplate aggregates, PluginRegistry plugins,
-                  ListingTypes listingTypes, SettingsCodec codec) {
+                  ListingTypes listingTypes, SettingsCodec codec, SearchMemory memory, Clock clock) {
         this.repository = repository;
         this.aggregates = aggregates;
         this.plugins = plugins;
         this.listingTypes = listingTypes;
         this.codec = codec;
+        this.memory = memory;
+        this.clock = clock;
     }
 
-    /** A new Search is active. */
+    /** A new Search is active and due at once, if it is inside its Schedule. */
     public StoredSearch create(SearchDefinition definition) {
         String id = UUID.randomUUID().toString();
-        StoredSearch search = new StoredSearch(id, true, normalise(build(id, definition)));
-        aggregates.insert(SearchRow.of(search, clock.instant()));
-        return search;
+        Search search = build(id, definition);
+        Schedule schedule = schedule(definition);
+        Instant now = clock.instant();
+        StoredSearch stored = new StoredSearch(id, true, normalise(search, schedule), firstRun(schedule, now));
+        aggregates.insert(SearchRow.of(stored, now));
+        return stored;
     }
 
-    /** Applies from the next run. What the Search has seen and its Listing History stay. */
+    /**
+     * Applies from the next run, which the new Schedule plans from the end of the last run.
+     * What the Search has seen and its Listing History stay.
+     */
     public StoredSearch update(String id, SearchDefinition definition) {
         SearchRow row = row(id);
         if (!row.listingType().equals(definition.listingType()))
             throw new InvalidSettingsException("listingType",
                     "is fixed after creation; create a new Search for another Listing Type");
-        return repository.save(row.with(normalise(build(id, definition)))).toStored();
+        Search search = build(id, definition);
+        Schedule schedule = schedule(definition);
+        Instant nextRun = memory.lastStatus(id)
+                .map(last -> schedule.nextRunAfter(last.finishedAt(), clock.getZone()))
+                .orElseGet(() -> firstRun(schedule, clock.instant()));
+        return repository.save(row.with(normalise(search, schedule), nextRun)).toStored();
     }
 
     public StoredSearch pause(String id) {
-        return setActive(id, false);
+        SearchRow row = row(id);
+        return repository.save(row.withActive(false, row.nextRunAt())).toStored();
     }
 
+    /** Due at once, if it is inside its Schedule. */
     public StoredSearch resume(String id) {
-        return setActive(id, true);
+        SearchRow row = row(id);
+        Instant nextRun = firstRun(schedule(row.toStored()), clock.instant());
+        return repository.save(row.withActive(true, nextRun)).toStored();
+    }
+
+    /** The active Searches whose next run time has come. */
+    public List<StoredSearch> due(Instant now) {
+        return repository.findByActiveTrueAndNextRunAtLessThanEqualOrderByNextRunAtAscIdAsc(now).stream()
+                .map(SearchRow::toStored).toList();
+    }
+
+    /** Sets the next run time. Does nothing when the Search was deleted meanwhile. */
+    public void planRun(String id, Instant nextRun) {
+        repository.planRun(id, nextRun);
+    }
+
+    /**
+     * Plans the next run from the end of the previous one, with the Schedule as stored now,
+     * so an edit saved during the run applies. Does nothing when the Search was deleted meanwhile.
+     */
+    public void planNextRun(String id, Instant previousEnd) {
+        repository.findById(id).ifPresent(row ->
+                planRun(id, schedule(row.toStored()).nextRunAfter(previousEnd, clock.getZone())));
+    }
+
+    /** @throws InvalidSettingsException when the stored Schedule can't be read */
+    public Schedule schedule(StoredSearch stored) {
+        return schedule(stored.definition());
+    }
+
+    private Schedule schedule(SearchDefinition d) {
+        return codec.decode(d.schedule(), Schedule.class, "schedule");
+    }
+
+    private Instant firstRun(Schedule schedule, Instant now) {
+        return schedule.firstRunFrom(now, clock.getZone());
     }
 
     /** Also deletes the Search's Listing History and seen Fingerprints. */
@@ -79,18 +133,14 @@ public class SearchService {
         return row(id).toStored();
     }
 
+    /** Empty when the Search was deleted. */
+    public Optional<StoredSearch> find(String id) {
+        return repository.findById(id).map(SearchRow::toStored);
+    }
+
     /** Oldest first. */
     public List<StoredSearch> list() {
         return repository.findAllByOrderByCreatedAtAscIdAsc().stream().map(SearchRow::toStored).toList();
-    }
-
-    /** Oldest first. */
-    public List<StoredSearch> active() {
-        return repository.findByActiveTrueOrderByCreatedAtAscIdAsc().stream().map(SearchRow::toStored).toList();
-    }
-
-    private StoredSearch setActive(String id, boolean active) {
-        return repository.save(row(id).withActive(active)).toStored();
     }
 
     private SearchRow row(String id) {
@@ -173,7 +223,7 @@ public class SearchService {
     }
 
     /** The definition as stored: every settings object re-encoded from its typed record. */
-    private SearchDefinition normalise(Search s) {
+    private SearchDefinition normalise(Search s, Schedule schedule) {
         return new SearchDefinition(
                 s.name(),
                 s.type().listingType().id(),
@@ -183,6 +233,7 @@ public class SearchService {
                 s.evaluator().map(e -> new SearchDefinition.Slot(e.evaluator().id(), codec.encode(e.settings()))).orElse(null),
                 s.notifiers().stream().map(n -> new SearchDefinition.NotifierSlot(
                         n.pluginId(), n.decisions(), codec.encode(n.settings()))).toList(),
+                codec.encode(schedule),
                 codec.encode(s.retention()));
     }
 }

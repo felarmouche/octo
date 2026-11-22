@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.time.Instant;
 import java.util.List;
 
 /** Create, read, edit, pause, resume and delete Searches. */
@@ -32,8 +33,9 @@ class SearchController {
         this.memory = memory;
     }
 
-    /** A Search with its state and last run status (null until it has run). */
-    record SearchResponse(String id, boolean active, @JsonUnwrapped SearchDefinition definition, RunStatus lastRun) {
+    /** A Search with its state, last run status (null until it has run) and next run time. */
+    record SearchResponse(String id, boolean active, @JsonUnwrapped SearchDefinition definition, RunStatus lastRun,
+                          Instant nextRun) {
     }
 
     @GetMapping
@@ -75,6 +77,6 @@ class SearchController {
 
     private SearchResponse response(StoredSearch search) {
         return new SearchResponse(search.id(), search.active(), search.definition(),
-                memory.lastStatus(search.id()).orElse(null));
+                memory.lastStatus(search.id()).orElse(null), search.nextRun());
     }
 }

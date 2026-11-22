@@ -141,5 +141,4 @@ Secrets are never committed.
 
 These are the places where the test setup differs from the target:
 
-- The stored Searches all run one after the other on one global interval. Target: each Search runs on its own Schedule.
 - The Telegram bot token is committed in `application.properties`. Target: revoke it and load it from an environment variable.

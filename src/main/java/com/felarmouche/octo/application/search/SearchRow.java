@@ -10,8 +10,8 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * A Search as one row of the {@code search} table: scalar columns plus jsonb for slots, filter settings
- * and retention ({@link JsonbConverters}). The last run columns are not mapped here, so saving a Search
+ * A Search as one row of the {@code search} table: scalar columns plus jsonb for slots, filter settings,
+ * Schedule and retention ({@link JsonbConverters}), and when it runs next. The last run columns are not mapped here, so saving a Search
  * never touches them; {@link JdbcSearchMemory} owns them.
  */
 @Table("search")
@@ -25,7 +25,9 @@ record SearchRow(
         JsonNode finders,
         JsonNode evaluator,
         JsonNode notifiers,
+        JsonNode schedule,
         JsonNode retention,
+        Instant nextRunAt,
         Instant createdAt) {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -34,7 +36,7 @@ record SearchRow(
         SearchDefinition d = search.definition();
         return new SearchRow(search.id(), search.active(), d.name(), d.listingType(), d.typeFilter(), d.exclusion(),
                 JSON.valueToTree(d.finders()), d.evaluator() == null ? null : JSON.valueToTree(d.evaluator()),
-                JSON.valueToTree(d.notifiers()), d.retention(), createdAt);
+                JSON.valueToTree(d.notifiers()), d.schedule(), d.retention(), search.nextRun(), createdAt);
     }
 
     StoredSearch toStored() {
@@ -44,16 +46,17 @@ record SearchRow(
                 evaluator == null || evaluator.isNull() ? null : JSON.treeToValue(evaluator, SearchDefinition.Slot.class),
                 JSON.treeToValue(notifiers, new TypeReference<List<SearchDefinition.NotifierSlot>>() {
                 }),
-                retention));
+                schedule,
+                retention), nextRunAt);
     }
 
-    /** The new definition; id, active, Listing Type and creation time stay. */
-    SearchRow with(SearchDefinition d) {
-        return of(new StoredSearch(id, active, d), createdAt);
+    /** The new definition and next run time; id, active, Listing Type and creation time stay. */
+    SearchRow with(SearchDefinition d, Instant nextRunAt) {
+        return of(new StoredSearch(id, active, d, nextRunAt), createdAt);
     }
 
-    SearchRow withActive(boolean active) {
+    SearchRow withActive(boolean active, Instant nextRunAt) {
         return new SearchRow(id, active, name, listingType, typeFilter, exclusion, finders, evaluator, notifiers,
-                retention, createdAt);
+                schedule, retention, nextRunAt, createdAt);
     }
 }

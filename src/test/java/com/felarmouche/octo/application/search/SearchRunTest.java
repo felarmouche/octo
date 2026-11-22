@@ -67,8 +67,9 @@ class SearchRunTest {
         // seen and history belong to a stored Search; the run takes its definition from the Search record
         jdbc.sql("""
                 insert into search (id, active, name, listing_type, type_filter, exclusion, finders, notifiers,
-                                    retention, created_at)
-                values ('search-1', true, 'test', 'generic', '{}', '{}', '[]', '[]', '{}', now())""").update();
+                                    schedule, retention, next_run_at, created_at)
+                values ('search-1', true, 'test', 'generic', '{}', '{}', '[]', '[]', '{"intervalMinutes": 5}', '{}',
+                        now(), now())""").update();
     }
 
     @Test

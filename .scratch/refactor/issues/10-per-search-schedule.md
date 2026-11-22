@@ -11,9 +11,16 @@ See spec "Schedule" and user stories 17–23.
 
 **Blocked by:** 09
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The Schedule is part of the Search in the API and is validated
-- [ ] Unit tests for the next-run calculation: inside the window, crossing the end of the window, excluded weekdays, timezone and DST
-- [ ] A slow Search doesn't delay others, and a Search never overlaps itself
-- [ ] The global fixed-delay property is gone
+- [x] The Schedule is part of the Search in the API and is validated
+- [x] Unit tests for the next-run calculation: inside the window, crossing the end of the window, excluded weekdays, timezone and DST
+- [x] A slow Search doesn't delay others, and a Search never overlaps itself
+- [x] The global fixed-delay property is gone
+
+## Comments
+
+- Done: `Schedule` (`intervalMinutes`, optional `window` {from, to} with `to` exclusive, `weekdays`, empty = all) is stored as jsonb on `search`, decoded and validated by the `SettingsCodec` under `schedule.*`. `next_run_at` is stored (V3) and returned as `nextRun`. Times are read in `octo.timezone`, carried by the `Clock` bean.
+- Create and resume plan the first allowed time from now; an edit plans from the end of the last run with the new Schedule; the end of a run plans from that end with the Schedule as stored then. A run missed while Octo was down, outside the window now, is moved to the next window instead of running.
+- `SearchRunner` ticks every 30 s and starts each due Search on its own virtual thread, skipping ones still running. `octo.searches.interval` is gone; `octo.scheduler.first-tick-after` delays the first tick (tests set it to a day and call `startDue()`).
+- Windows can't cross midnight (from must be before to).

@@ -1,7 +1,10 @@
 package com.felarmouche.octo.application.search;
 
+import org.springframework.data.jdbc.repository.query.Modifying;
+import org.springframework.data.jdbc.repository.query.Query;
 import org.springframework.data.repository.ListCrudRepository;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -13,5 +16,11 @@ interface SearchRepository extends ListCrudRepository<SearchRow, String> {
 
     List<SearchRow> findAllByOrderByCreatedAtAscIdAsc();
 
-    List<SearchRow> findByActiveTrueOrderByCreatedAtAscIdAsc();
+    /** The active Searches whose next run time has come, longest waiting first. */
+    List<SearchRow> findByActiveTrueAndNextRunAtLessThanEqualOrderByNextRunAtAscIdAsc(Instant now);
+
+    /** Only the next run time, so an edit saved during a run is kept. Does nothing for a deleted Search. */
+    @Modifying
+    @Query("update search set next_run_at = :nextRunAt where id = :id")
+    void planRun(String id, Instant nextRunAt);
 }
