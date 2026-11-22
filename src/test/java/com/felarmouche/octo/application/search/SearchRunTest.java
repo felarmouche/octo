@@ -144,12 +144,12 @@ class SearchRunTest {
                 new Retention(Set.of(), Optional.of(2)));
 
         run.run(search);
-        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("B", "C");
+        assertThat(history()).extracting(j -> j.listing().title()).containsExactly("B", "C");
 
         finder.listings = List.of(listing("A", 100_00), listing("D", 130_00)); // A left the history but was seen
         run.run(search);
 
-        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("C", "D");
+        assertThat(history()).extracting(j -> j.listing().title()).containsExactly("C", "D");
         assertThat(notifier.sent).extracting(a -> a.listing().title()).containsExactly("A", "B", "C", "D");
     }
 
@@ -169,7 +169,7 @@ class SearchRunTest {
 
         run.run(search);
 
-        assertThat(memory.history("search-1")).extracting(j -> j.listing().title()).containsExactly("Unklar", "Gut 2");
+        assertThat(history()).extracting(j -> j.listing().title()).containsExactly("Unklar", "Gut 2");
     }
 
     @Test
@@ -235,7 +235,7 @@ class SearchRunTest {
         run.run(search);
 
         assertThat(notifier.sent).extracting(a -> a.verdict().decision()).containsExactly(Decision.BUY);
-        assertThat(memory.history("search-1")).extracting(j -> j.verdict().decision())
+        assertThat(history()).extracting(j -> j.verdict().decision())
                 .containsExactly(Decision.NOT_EVALUATABLE, Decision.BUY);
     }
 
@@ -255,7 +255,7 @@ class SearchRunTest {
 
         assertThat(onlyBuy.sent).extracting(a -> a.listing().title()).containsExactly("Gut");
         assertThat(buyAndUnsure.sent).extracting(a -> a.listing().title()).containsExactly("Gut", "Unklar");
-        assertThat(memory.history("search-1")).hasSize(3);
+        assertThat(history()).hasSize(3);
     }
 
     @Test
@@ -316,7 +316,7 @@ class SearchRunTest {
                 List.of(slot(broken, Decision.BUY), slot(working, Decision.BUY))));
 
         assertThat(working.sent).hasSize(1);
-        assertThat(memory.history("search-1")).hasSize(1);
+        assertThat(history()).hasSize(1);
         assertThat(status.ok()).isFalse();
         assertThat(status.messages()).singleElement().asString()
                 .contains("recording-notifier").contains("Telegram antwortet 502");
@@ -334,7 +334,7 @@ class SearchRunTest {
 
         run.run(search);
 
-        assertThat(memory.history("search-1"))
+        assertThat(history())
                 .extracting(j -> j.listing().title(), j -> j.verdict().decision(), j -> j.verdict().reason())
                 .containsExactly(
                         tuple("Zu billig", Decision.NO_BUY, "Preis 50 € < 100 €"),
@@ -356,7 +356,7 @@ class SearchRunTest {
         run.run(search);
         run.run(search);
 
-        assertThat(memory.history("search-1"))
+        assertThat(history())
                 .extracting(j -> j.listing().externalId(), j -> j.verdict().decision(), j -> j.verdict().reason())
                 .containsExactly(
                         tuple("weak", Decision.NO_BUY, "Akku 74 % < 80 %"),
@@ -382,7 +382,7 @@ class SearchRunTest {
 
         run.run(search);
 
-        assertThat(memory.history("search-1"))
+        assertThat(history())
                 .extracting(j -> j.listing().externalId(), j -> j.verdict().reason())
                 .containsExactly(
                         tuple("weak-range", "Akku höchstens 79 % < 80 %"),
@@ -419,7 +419,7 @@ class SearchRunTest {
         run.run(phoneSearch(PhoneFilterSettings.NONE, finder, Optional.of(slot(new FakeEvaluator(l -> verdict))),
                 new RecordingNotifier()));
 
-        assertThat(memory.history("search-1")).singleElement().satisfies(judged -> {
+        assertThat(history()).singleElement().satisfies(judged -> {
             assertThat(judged.listing().attributes()).contains(new PhoneAttributes(Optional.of(Storage.GB_128),
                     Optional.of(Battery.exact(91)), Optional.of("Blau"), Optional.of(PhoneCondition.VERY_GOOD)));
             assertThat(judged.listing().priceInCents()).contains(300_00);
@@ -444,7 +444,7 @@ class SearchRunTest {
         run.run(search);
         run.run(search);
 
-        assertThat(memory.history("search-1"))
+        assertThat(history())
                 .extracting(j -> j.listing().externalId(), j -> j.verdict().decision(), j -> j.verdict().reason())
                 .containsExactly(
                         tuple("broken-and-weak", Decision.NO_BUY, "Display beschädigt (\"Display gesprungen\")"),
@@ -467,6 +467,11 @@ class SearchRunTest {
     }
 
     // --- helpers -----------------------------------------------------------------------------
+
+    /** The whole Listing History of search-1, oldest first. */
+    private List<RecordedListing> history() {
+        return memory.history("search-1", 0, 1000).entries().reversed();
+    }
 
     private static Search phoneSearch(PhoneFilterSettings filter, FakeFinder finder,
                                       Optional<Search.EvaluatorSlot<?>> evaluator, RecordingNotifier notifier) {

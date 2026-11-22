@@ -4,9 +4,9 @@
 
 **Blocked by:** refactor/11 (Discovery and history endpoints) committed
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Each history entry has an id and its recorded time
-- [ ] Entries are ordered by recorded time, newest first
-- [ ] The endpoint takes page and page size, with a sensible default and maximum, and returns whether more entries exist
-- [ ] API tests cover ordering, paging and an empty history
+- [x] Each history entry has an id and its recorded time
+- [x] Entries are ordered by recorded time, newest first
+- [x] The endpoint takes page and page size, with a sensible default and maximum, and returns whether more entries exist
+- [x] API tests cover ordering, paging and an empty history

@@ -449,7 +449,7 @@ class SearchApiTest {
     // --- Listing History -----------------------------------------------------------------------
 
     @Test
-    void theListingHistoryIsNewestFirstWithDecisionReasonAndDetails() {
+    void theListingHistoryIsNewestFirstWithIdRecordedTimeDecisionReasonAndDetails() {
         String withEvaluator = ps5Search().replace("\"notifiers\":",
                 "\"evaluator\": {\"plugin\": \"fake-evaluator\", \"settings\": {}}, \"notifiers\":");
         String id = id(post("/api/searches", withEvaluator));
@@ -459,15 +459,22 @@ class SearchApiTest {
         clock.advance(Duration.ofMinutes(5));
         runDue();
 
-        assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
-                .hasPathSatisfying("$[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 Disc", "PS5 defekt"))
-                .hasPathSatisfying("$[0].listing.priceInCents", v -> v.assertThat().isEqualTo(240_00))
-                .hasPathSatisfying("$[0].verdict.decision", v -> v.assertThat().isEqualTo("BUY"))
-                .hasPathSatisfying("$[0].verdict.reason", v -> v.assertThat().isEqualTo("Marge reicht"))
-                .hasPathSatisfying("$[0].verdict.details", v -> v.assertThat()
+        MvcTestResult history = get("/api/searches/" + id + "/history");
+        assertThat(history).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 Disc", "PS5 defekt"))
+                .hasPathSatisfying("$.entries[*].recordedAt", v -> v.assertThat().asList()
+                        .containsExactly("2026-11-23T11:05:00Z", "2026-11-23T11:00:00Z"))
+                .hasPathSatisfying("$.entries[0].listing.priceInCents", v -> v.assertThat().isEqualTo(240_00))
+                .hasPathSatisfying("$.entries[0].verdict.decision", v -> v.assertThat().isEqualTo("BUY"))
+                .hasPathSatisfying("$.entries[0].verdict.reason", v -> v.assertThat().isEqualTo("Marge reicht"))
+                .hasPathSatisfying("$.entries[0].verdict.details", v -> v.assertThat()
                         .isEqualTo(List.of(Map.of("label", "Marge", "value", "50 €"))))
-                .hasPathSatisfying("$[1].verdict.decision", v -> v.assertThat().isEqualTo("NO_BUY"))
-                .hasPathSatisfying("$[1].verdict.reason", v -> v.assertThat().asString().contains("defekt"));
+                .hasPathSatisfying("$.entries[1].verdict.decision", v -> v.assertThat().isEqualTo("NO_BUY"))
+                .hasPathSatisfying("$.entries[1].verdict.reason", v -> v.assertThat().asString().contains("defekt"))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(false));
+        JsonNode entries = json(history).get("entries");
+        assertThat(entries.get(0).get("id").isIntegralNumber()).isTrue();
+        assertThat(entries.get(0).get("id").asLong()).isNotEqualTo(entries.get(1).get("id").asLong());
     }
 
     @Test
@@ -477,9 +484,54 @@ class SearchApiTest {
         runDue();
 
         assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
-                .hasPathSatisfying("$[0].display", v -> v.assertThat()
+                .hasPathSatisfying("$.entries[0].display", v -> v.assertThat()
                         .isEqualTo(List.of(Map.of("label", "Speicher", "value", "128 GB"))))
-                .hasPathSatisfying("$[0].listing.attributes.storage", v -> v.assertThat().isEqualTo("GB_128"));
+                .hasPathSatisfying("$.entries[0].listing.attributes.storage", v -> v.assertThat().isEqualTo("GB_128"));
+    }
+
+    @Test
+    void theListingHistoryIsReadPageByPageAndSaysWhetherMoreEntriesExist() {
+        String id = id(post("/api/searches", ps5Search()));
+        for (String title : List.of("PS5 A", "PS5 B", "PS5 C", "PS5 D", "PS5 E")) {
+            finder.offers.put("ps5", List.of(listing(title, 200_00)));
+            runDue();
+            clock.advance(Duration.ofMinutes(5));
+        }
+
+        assertThat(get("/api/searches/" + id + "/history?page=0&size=2")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 E", "PS5 D"))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(true));
+        assertThat(get("/api/searches/" + id + "/history?page=1&size=2")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 C", "PS5 B"))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(true));
+        assertThat(get("/api/searches/" + id + "/history?page=2&size=2")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 A"))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(false));
+    }
+
+    @Test
+    void anEmptyListingHistoryHasNoEntriesAndNoMore() {
+        String id = id(post("/api/searches", ps5Search()));
+
+        assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries", v -> v.assertThat().asList().isEmpty())
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(false));
+    }
+
+    @Test
+    void theListingHistoryPageSizeDefaultsTo24AndIsCutAt100() {
+        String id = id(post("/api/searches", ps5Search().replace("\"newest\": 50", "\"newest\": null")));
+        List<Listing> offers = new ArrayList<>();
+        for (int i = 0; i < 101; i++) offers.add(listing("PS5 Nr. " + i, 200_00));
+        finder.offers.put("ps5", offers);
+        runDue();
+
+        assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries", v -> v.assertThat().asList().hasSize(24))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(true));
+        assertThat(get("/api/searches/" + id + "/history?size=1000")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.entries", v -> v.assertThat().asList().hasSize(100))
+                .hasPathSatisfying("$.hasMore", v -> v.assertThat().isEqualTo(true));
     }
 
     @Test

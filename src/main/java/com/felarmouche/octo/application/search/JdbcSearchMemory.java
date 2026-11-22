@@ -15,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.jsontype.NamedType;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -60,12 +61,12 @@ public class JdbcSearchMemory implements SearchMemory {
 
     @Override
     @Transactional
-    public void record(String searchId, List<JudgedListing> judged, Retention retention) {
+    public void record(String searchId, List<JudgedListing> judged, Retention retention, Instant recordedAt) {
         for (JudgedListing j : judged) {
             jdbc.sql("""
-                            insert into listing_history (search_id, decision, listing, verdict)
-                            values (?, ?, cast(? as jsonb), cast(? as jsonb))""")
-                    .params(searchId, j.verdict().decision().name(),
+                            insert into listing_history (search_id, recorded_at, decision, listing, verdict)
+                            values (?, ?, ?, cast(? as jsonb), cast(? as jsonb))""")
+                    .params(searchId, Timestamp.from(recordedAt), j.verdict().decision().name(),
                             JSON.writeValueAsString(j.listing()), JSON.writeValueAsString(j.verdict()))
                     .update();
         }
@@ -91,13 +92,24 @@ public class JdbcSearchMemory implements SearchMemory {
     }
 
     @Override
-    public List<JudgedListing> history(String searchId) {
-        return jdbc.sql("select listing, verdict from listing_history where search_id = ? order by id")
-                .param(searchId)
-                .query((rs, row) -> new JudgedListing(
+    public HistoryPage history(String searchId, int page, int size) {
+        // One row more than the page holds tells whether more entries exist.
+        List<RecordedListing> rows = jdbc.sql("""
+                        select id, recorded_at, listing, verdict from listing_history
+                        where search_id = :searchId
+                        order by recorded_at desc, id desc
+                        limit :limit offset :offset""")
+                .param("searchId", searchId)
+                .param("limit", size + 1)
+                .param("offset", (long) page * size)
+                .query((rs, row) -> new RecordedListing(
+                        rs.getLong("id"),
+                        rs.getTimestamp("recorded_at").toInstant(),
                         JSON.readValue(rs.getString("listing"), Listing.class),
                         JSON.readValue(rs.getString("verdict"), Verdict.class)))
                 .list();
+        boolean hasMore = rows.size() > size;
+        return new HistoryPage(hasMore ? rows.subList(0, size) : rows, hasMore);
     }
 
     @Override

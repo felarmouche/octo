@@ -156,10 +156,18 @@ public class SearchService {
         return repository.findById(id).map(SearchRow::toStored);
     }
 
-    /** The Search's Listing History, newest first. */
-    public List<JudgedListing> history(String id) {
+    /** Page size of the Listing History when none is asked for. */
+    public static final int DEFAULT_HISTORY_PAGE_SIZE = 24;
+    /** Larger page sizes are cut to this, so a keep-all Search can't grow a response without limit. */
+    public static final int MAX_HISTORY_PAGE_SIZE = 100;
+
+    /**
+     * One page of the Search's Listing History, newest first. Pages count from 0; a negative page reads as 0
+     * and the size is held between 1 and {@link #MAX_HISTORY_PAGE_SIZE}.
+     */
+    public HistoryPage history(String id, int page, int size) {
         if (!repository.existsById(id)) throw new SearchNotFoundException(id);
-        return memory.history(id).reversed();
+        return memory.history(id, Math.max(page, 0), Math.clamp(size, 1, MAX_HISTORY_PAGE_SIZE));
     }
 
     /** Oldest first. */
