@@ -10,9 +10,11 @@ import com.felarmouche.octo.core.plugin.Evaluator;
 import com.felarmouche.octo.core.plugin.Finder;
 import com.felarmouche.octo.core.plugin.Notifier;
 import com.felarmouche.octo.core.plugin.Plugin;
+import org.springframework.data.jdbc.core.JdbcAggregateTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -26,13 +28,17 @@ import java.util.UUID;
 @Service
 public class SearchService {
 
-    private final JdbcSearchStore store;
+    private final SearchRepository repository;
+    private final JdbcAggregateTemplate aggregates;
     private final PluginRegistry plugins;
     private final ListingTypes listingTypes;
     private final SettingsCodec codec;
+    private final Clock clock = Clock.systemUTC();
 
-    public SearchService(JdbcSearchStore store, PluginRegistry plugins, ListingTypes listingTypes, SettingsCodec codec) {
-        this.store = store;
+    SearchService(SearchRepository repository, JdbcAggregateTemplate aggregates, PluginRegistry plugins,
+                  ListingTypes listingTypes, SettingsCodec codec) {
+        this.repository = repository;
+        this.aggregates = aggregates;
         this.plugins = plugins;
         this.listingTypes = listingTypes;
         this.codec = codec;
@@ -42,19 +48,17 @@ public class SearchService {
     public StoredSearch create(SearchDefinition definition) {
         String id = UUID.randomUUID().toString();
         StoredSearch search = new StoredSearch(id, true, normalise(build(id, definition)));
-        store.insert(search);
+        aggregates.insert(SearchRow.of(search, clock.instant()));
         return search;
     }
 
     /** Applies from the next run. What the Search has seen and its Listing History stay. */
     public StoredSearch update(String id, SearchDefinition definition) {
-        StoredSearch stored = get(id);
-        if (!stored.definition().listingType().equals(definition.listingType()))
+        SearchRow row = row(id);
+        if (!row.listingType().equals(definition.listingType()))
             throw new InvalidSettingsException("listingType",
                     "is fixed after creation; create a new Search for another Listing Type");
-        SearchDefinition normalised = normalise(build(id, definition));
-        if (!store.update(id, normalised)) throw new SearchNotFoundException(id);
-        return new StoredSearch(id, stored.active(), normalised);
+        return repository.save(row.with(normalise(build(id, definition)))).toStored();
     }
 
     public StoredSearch pause(String id) {
@@ -67,24 +71,30 @@ public class SearchService {
 
     /** Also deletes the Search's Listing History and seen Fingerprints. */
     public void delete(String id) {
-        if (!store.delete(id)) throw new SearchNotFoundException(id);
+        if (!repository.existsById(id)) throw new SearchNotFoundException(id);
+        repository.deleteById(id);
     }
 
     public StoredSearch get(String id) {
-        return store.find(id).orElseThrow(() -> new SearchNotFoundException(id));
+        return row(id).toStored();
     }
 
+    /** Oldest first. */
     public List<StoredSearch> list() {
-        return store.all();
+        return repository.findAllByOrderByCreatedAtAscIdAsc().stream().map(SearchRow::toStored).toList();
     }
 
+    /** Oldest first. */
     public List<StoredSearch> active() {
-        return store.active();
+        return repository.findByActiveTrueOrderByCreatedAtAscIdAsc().stream().map(SearchRow::toStored).toList();
     }
 
     private StoredSearch setActive(String id, boolean active) {
-        if (!store.setActive(id, active)) throw new SearchNotFoundException(id);
-        return get(id);
+        return repository.save(row(id).withActive(active)).toStored();
+    }
+
+    private SearchRow row(String id) {
+        return repository.findById(id).orElseThrow(() -> new SearchNotFoundException(id));
     }
 
     /**
