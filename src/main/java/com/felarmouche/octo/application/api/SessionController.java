@@ -1,7 +1,6 @@
 package com.felarmouche.octo.application.api;
 
 import com.felarmouche.octo.application.api.ApiErrors.ErrorResponse;
-import com.felarmouche.octo.application.settings.FieldError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
@@ -20,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
-import java.util.List;
 
 /** Opens, shows and ends the session of the one user (ADR-0002). */
 @RestController
@@ -52,7 +50,7 @@ class SessionController {
         } catch (AuthenticationException e) {
             Thread.sleep(FAILED_LOGIN_DELAY);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new ErrorResponse(List.of(new FieldError("", "wrong username or password"))));
+                    .body(ErrorResponse.of("wrong username or password"));
         }
         // a session that existed before the login gets a new id, so nobody can plant one beforehand
         if (request.getSession(false) != null) request.changeSessionId();

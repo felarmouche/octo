@@ -250,10 +250,24 @@ class SearchApiTest {
 
     @Test
     void anUnknownSearchIsNotFound() {
-        assertThat(get("/api/searches/nope")).hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(put("/api/searches/nope", ps5Search())).hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(post("/api/searches/nope/pause", "")).hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(delete("/api/searches/nope")).hasStatus(HttpStatus.NOT_FOUND);
+        assertNoFieldError(get("/api/searches/nope"), HttpStatus.NOT_FOUND);
+        assertNoFieldError(put("/api/searches/nope", ps5Search()), HttpStatus.NOT_FOUND);
+        assertNoFieldError(post("/api/searches/nope/pause", ""), HttpStatus.NOT_FOUND);
+        assertNoFieldError(delete("/api/searches/nope"), HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void requestsTheApiCannotServeGetTheSameErrorBody() {
+        assertNoFieldError(get("/api/no-such-endpoint"), HttpStatus.NOT_FOUND);
+        assertNoFieldError(delete("/api/searches"), HttpStatus.METHOD_NOT_ALLOWED);
+        assertNoFieldError(get("/api/searches/template"), HttpStatus.BAD_REQUEST);
+    }
+
+    @Test
+    void aBodyThatIsNoSearchIsRefusedWithoutAField() {
+        assertNoFieldError(post("/api/searches", "not json"), HttpStatus.BAD_REQUEST);
+        assertNoFieldError(post("/api/searches", ps5Search().replace("\"finders\": [{", "\"finders\": [null, {")),
+                HttpStatus.BAD_REQUEST);
     }
 
     // --- Template ------------------------------------------------------------------------------
@@ -501,6 +515,13 @@ class SearchApiTest {
     private static void assertRefused(MvcTestResult result, String field) {
         assertThat(result).hasStatus(HttpStatus.BAD_REQUEST).bodyJson()
                 .hasPathSatisfying("$.errors[*].field", v -> v.assertThat().asList().containsExactly(field))
+                .hasPathSatisfying("$.errors[0].message", v -> v.assertThat().asString().isNotBlank());
+    }
+
+    /** The uniform error body with one error that belongs to no field. */
+    private static void assertNoFieldError(MvcTestResult result, HttpStatus status) {
+        assertThat(result).hasStatus(status).bodyJson()
+                .doesNotHavePath("$.errors[0].field")
                 .hasPathSatisfying("$.errors[0].message", v -> v.assertThat().asString().isNotBlank());
     }
 

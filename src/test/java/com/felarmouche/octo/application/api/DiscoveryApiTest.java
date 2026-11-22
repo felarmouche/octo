@@ -135,9 +135,10 @@ class DiscoveryApiTest {
     }
 
     @Test
-    void anUnknownListingTypeIsRefused() {
+    void anUnknownListingTypeIsRefusedWithoutAField() {
         assertThat(get("/api/plugins?listingType=car")).hasStatus(HttpStatus.BAD_REQUEST).bodyJson()
-                .hasPathSatisfying("$.errors[*].field", v -> v.assertThat().asList().containsExactly("listingType"));
+                .doesNotHavePath("$.errors[0].field")
+                .hasPathSatisfying("$.errors[0].message", v -> v.assertThat().asString().contains("car"));
     }
 
     @Test

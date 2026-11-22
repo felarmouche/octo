@@ -6,6 +6,7 @@ import com.felarmouche.octo.application.plugin.PluginRegistry;
 import com.felarmouche.octo.application.search.Retention;
 import com.felarmouche.octo.application.search.Schedule;
 import com.felarmouche.octo.application.search.SearchDefinition;
+import com.felarmouche.octo.application.settings.InvalidSettingsException;
 import com.felarmouche.octo.application.settings.SettingsSchema;
 import com.felarmouche.octo.core.exclusion.ExclusionFilterSettings;
 import com.felarmouche.octo.core.exclusion.ExclusionPreset;
@@ -80,11 +81,15 @@ class DiscoveryController {
     record PluginResponse(String id, String title, PluginKind kind, List<String> listingTypes, JsonNode settingsSchema) {
     }
 
-    /** @param listingType when given, only the Plugins a Search of this Listing Type can use */
+    /**
+     * @param listingType when given, only the Plugins a Search of this Listing Type can use
+     * @throws InvalidSettingsException without a field when there is no Listing Type with this id
+     */
     @GetMapping("/plugins")
     List<PluginResponse> plugins(@RequestParam(required = false) String listingType) {
         List<Plugin<?>> found = listingType == null ? plugins.all()
-                : plugins.supporting(listingTypes.require(listingType).id());
+                : plugins.supporting(listingTypes.find(listingType)
+                .orElseThrow(() -> new InvalidSettingsException(null, "unknown Listing Type: " + listingType)).id());
         return found.stream().map(this::response).toList();
     }
 
