@@ -141,14 +141,6 @@ Secrets are never committed.
 
 These are the places where the test setup differs from the target:
 
-- The Search is hardcoded in `SearchRunner` with one global `fixedDelay`. Target: Searches come from storage, each with its own Schedule.
-- `SearchSettings` holds Rebuy's settings (`rebuyUrl`, `minMarginInCents`), and `core` depends on `application` through it. Target: each Plugin has its own settings, and the Search holds only Search-level fields.
-- Plugins get their settings in three different ways: constructor (`KleinanzeigenFinder`), method argument (`RebuyEvaluator`) and `@Value` (`TelegramNotifier`). Target: one way for all of them.
-- `TelegramNotifier` doesn't extend `BaseNotifier`, and the chat ID is global. Target: like every other Plugin, with the chat as a Notifier setting.
-- The Decisions to notify about are hardcoded in `Search` (`BUY`, `UNSURE`). Target: a setting per Notifier.
-- `RebuyPhoneFilter` mixes damage words, battery and storage checks, and margin pre-checks. Target: damage words → phone Exclusion Preset; battery and storage → phone Listing Type Filter; only the Reference Product checks stay in the Rebuy Evaluator.
-- Thresholds are constants (`MIN_CONFIDENCE`, `MIN_BATTERY_HEALTH`, `MAX_PAGES`, `MAX_IMAGES`). Target: settings where a user would tune them.
+- The Searches are built in code (`InCodeSearches`) and share one global interval, and the Telegram chat comes from one global property. Target: Searches come from storage, each with its own Schedule and its own Notifier settings.
 - What a Search has seen lives in memory and is lost on restart. Target: stored, along with the Listing History and last run status.
-- The resale price and margin exist only in the Verdict's reason text. Target: structured evaluation details in the Verdict.
-- The Listing Type is the string `"phone"`, and `RebuyEvaluator` silently ignores other Listings. Target: Plugins declare supported Listing Types, and a Search can only combine matching ones.
 - The Telegram bot token is committed in `application.properties`. Target: revoke it and load it from an environment variable.

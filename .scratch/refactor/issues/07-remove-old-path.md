@@ -10,6 +10,6 @@
 
 **Status:** ready-for-agent
 
-- [ ] No references to the removed types remain; the build and all tests pass
-- [ ] The dependency rule holds: nothing depends on application or plugins, and core depends on nothing else in Octo
-- [ ] Both in-code Searches still run and alert as before
+- [x] No references to the removed types remain; the build and all tests pass
+- [x] The dependency rule holds: nothing depends on application or plugins, and core depends on nothing else in Octo
+- [x] Both in-code Searches still run and alert as before
