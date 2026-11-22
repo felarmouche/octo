@@ -2,6 +2,7 @@ package com.felarmouche.octo.application.api;
 
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.felarmouche.octo.application.plugin.ListingTypes;
+import com.felarmouche.octo.application.search.HistoryPage;
 import com.felarmouche.octo.application.search.RunStatus;
 import com.felarmouche.octo.application.search.SearchDefinition;
 import com.felarmouche.octo.application.search.SearchMemory;
@@ -51,7 +52,11 @@ class SearchController {
      *
      * @param display the Listing's attributes as its Listing Type shows them, e.g. "Speicher: 128 GB"
      */
-    record HistoryEntry(Listing listing, List<LabelledValue> display, Verdict verdict) {
+    record HistoryEntry(long id, Instant recordedAt, Listing listing, List<LabelledValue> display, Verdict verdict) {
+    }
+
+    /** One page of the Listing History, newest first, and whether older entries follow. */
+    record HistoryResponse(List<HistoryEntry> entries, boolean hasMore) {
     }
 
     @GetMapping
@@ -97,14 +102,16 @@ class SearchController {
         return response(searches.resume(id));
     }
 
-    /** Newest first. */
+    /** Newest first, page by page. Pages count from 0. */
     @GetMapping("/{id}/history")
-    List<HistoryEntry> history(@PathVariable String id) {
+    HistoryResponse history(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
+                            @RequestParam(defaultValue = "" + SearchService.DEFAULT_HISTORY_PAGE_SIZE) int size) {
         StoredSearch search = searches.get(id);
         ListingType<?> type = listingTypes.require(search.definition().listingType());
-        return searches.history(id).stream()
-                .map(j -> new HistoryEntry(j.listing(), type.describe(j.listing()), j.verdict()))
-                .toList();
+        HistoryPage history = searches.history(id, page, size);
+        return new HistoryResponse(history.entries().stream()
+                .map(e -> new HistoryEntry(e.id(), e.recordedAt(), e.listing(), type.describe(e.listing()), e.verdict()))
+                .toList(), history.hasMore());
     }
 
     private SearchResponse response(StoredSearch search) {

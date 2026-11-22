@@ -2,6 +2,7 @@ package com.felarmouche.octo.application.search;
 
 import com.felarmouche.octo.core.domain.Fingerprint;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -16,11 +17,11 @@ public interface SearchMemory {
 
     void remember(String searchId, Collection<Fingerprint> fingerprints);
 
-    /** Adds the judged Listings to the Listing History, then applies the retention rule. */
-    void record(String searchId, List<JudgedListing> judged, Retention retention);
+    /** Adds the judged Listings to the Listing History as recorded at the given time, then applies the retention rule. */
+    void record(String searchId, List<JudgedListing> judged, Retention retention, Instant recordedAt);
 
-    /** The Listing History in the order it was recorded. */
-    List<JudgedListing> history(String searchId);
+    /** One page of the Listing History, newest first. Pages count from 0. */
+    HistoryPage history(String searchId, int page, int size);
 
     /** Replaces the Search's last run status. Does nothing when the Search was deleted meanwhile. */
     void saveStatus(String searchId, RunStatus status);

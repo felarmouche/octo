@@ -23,7 +23,7 @@ Everything except `POST /api/login` needs a session. `POST /api/login` with `{"u
 | `GET`, `POST /api/searches` | list and create Searches |
 | `GET`, `PUT`, `DELETE /api/searches/{id}` | read, edit, delete a Search |
 | `POST /api/searches/{id}/pause`, `/resume` | pause and resume |
-| `GET /api/searches/{id}/history` | the Listing History, newest first, each Listing with its Verdict |
+| `GET /api/searches/{id}/history?page=&size=` | one page of the Listing History, newest first: `{entries: [{id, recordedAt, listing, display, verdict}], hasMore}`; `page` counts from 0, `size` defaults to 24 and is cut at 100 |
 
 Invalid input gives `400` with `{"errors": [{"field": "finders[0].settings.maxListings", "message": "..."}]}`; `field` is left out when the error belongs to no field of a Search, e.g. an unknown Listing Type for the template.
 

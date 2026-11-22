@@ -104,7 +104,7 @@ public class SearchRun {
 
     /** 6. Record: store every judged Listing and apply the retention rule, remember all Fingerprints except NOT_EVALUATABLE ones. */
     private void record(Search search, List<JudgedListing> judged) {
-        memory.record(search.id(), judged, search.retention());
+        memory.record(search.id(), judged, search.retention(), clock.instant());
         memory.remember(search.id(), judged.stream()
                 .filter(j -> j.verdict().decision() != Decision.NOT_EVALUATABLE)
                 .map(j -> j.listing().fingerprint())
