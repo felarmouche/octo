@@ -1,4 +1,4 @@
-package com.felarmouche.octo.plugins.evaluator.rebuy.iphone;
+package com.felarmouche.octo.infra.ai;
 
 import com.google.genai.Client;
 import com.google.genai.types.HttpOptions;
@@ -15,7 +15,7 @@ import java.util.List;
  * <p>
  * Standardmäßig hat das Google-SDK keinen Timeout und wiederholt 408/429/5xx bis zu 5x mit Backoff.
  * Das blockiert den Wechsel auf das nächste Modell. Hier: harter Timeout pro Request, keine SDK-Retries,
- * das Ausweichen übernimmt {@link GeminiRebuyIphoneAssessment}.
+ * das Ausweichen übernimmt {@link AiClient}.
  */
 @Configuration
 public class GeminiClientConfig {

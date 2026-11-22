@@ -14,12 +14,12 @@ See spec "AI infrastructure" and user stories 66, 87.
 
 **Status:** ready-for-agent
 
-- [ ] The Gemini client configuration and the fallback chain properties live in infra, not in the Rebuy package
-- [ ] Rebuy's assessment contains only its prompt, parameters and response type
-- [ ] Tests with a fake model:
+- [x] The Gemini client configuration and the fallback chain properties live in infra, not in the Rebuy package
+- [x] Rebuy's assessment contains only its prompt, parameters and response type
+- [x] Tests with a fake model:
   - falls through to the next model on failure
   - skips a model that is cooling down
   - tries all models when all are cooling down
   - stops on an invalid key
   - collects the failure messages
-- [ ] Existing Rebuy behaviour on the old path is unchanged
+- [x] Existing Rebuy behaviour on the old path is unchanged

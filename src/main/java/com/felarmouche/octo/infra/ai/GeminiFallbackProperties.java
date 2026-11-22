@@ -1,4 +1,4 @@
-package com.felarmouche.octo.plugins.evaluator.rebuy.iphone;
+package com.felarmouche.octo.infra.ai;
 
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.boot.context.properties.ConfigurationProperties;

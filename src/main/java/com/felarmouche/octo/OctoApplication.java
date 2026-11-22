@@ -1,6 +1,6 @@
 package com.felarmouche.octo;
 
-import com.felarmouche.octo.plugins.evaluator.rebuy.iphone.GeminiFallbackProperties;
+import com.felarmouche.octo.infra.ai.GeminiFallbackProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

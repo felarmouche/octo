@@ -6,6 +6,7 @@ import com.felarmouche.octo.core.shared.Fingerprint;
 import com.felarmouche.octo.core.shared.Verdict;
 import com.felarmouche.octo.core.shared.listing.Listing;
 import com.felarmouche.octo.core.shared.listing.PhoneListing;
+import com.felarmouche.octo.infra.ai.AiClient;
 import com.felarmouche.octo.plugins.evaluator.rebuy.iphone.ConditionAssessment;
 import com.felarmouche.octo.plugins.evaluator.rebuy.iphone.Properties.RebuyGrade;
 import com.felarmouche.octo.plugins.evaluator.rebuy.iphone.GeminiRebuyIphoneAssessment;
@@ -78,7 +79,7 @@ public class RebuyEvaluator extends BaseEvaluator {
         } catch (RuntimeException e) {
             log.error("KI-Bewertung fehlgeschlagen für {}", phone.getTitle(), e);
             phone.setVerdict(new Verdict(Verdict.Decision.UNSURE,
-                    "KI-Bewertung fehlgeschlagen: " + GeminiRebuyIphoneAssessment.rootCauseMessage(e)));
+                    "KI-Bewertung fehlgeschlagen: " + AiClient.rootCauseMessage(e)));
         }
     }
 
