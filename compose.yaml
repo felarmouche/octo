@@ -1,5 +1,5 @@
 # Octo and its PostgreSQL database: `docker compose up --build`.
-# GEMINI_API_KEY is taken from the shell or a local .env file (never committed).
+# GEMINI_API_KEY and API_PASSWORD are taken from the shell or a local .env file (never committed).
 services:
   postgres:
     image: postgres:18-alpine
@@ -28,6 +28,8 @@ services:
       DB_USER: octo
       DB_PASSWORD: ${DB_PASSWORD:-octo}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      API_USER: ${API_USER:-octo}
+      API_PASSWORD: ${API_PASSWORD:?set API_PASSWORD for the API user}
     ports:
       - "8080:8080"
     restart: unless-stopped

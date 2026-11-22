@@ -1,6 +1,10 @@
 package com.felarmouche.octo.plugins.rebuy;
 
-import java.util.Objects;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /**
  * @param referenceProductUrl the Rebuy product page Listings are compared against
@@ -8,13 +12,8 @@ import java.util.Objects;
  * @param minAiConfidence     AI assessments below this (0..1) give UNSURE
  * @param maxPhotos           the max number of photos sent to the AI
  */
-public record RebuySettings(String referenceProductUrl, int minMarginInCents, double minAiConfidence, int maxPhotos) {
-    public RebuySettings {
-        Objects.requireNonNull(referenceProductUrl, "referenceProductUrl");
-        if (referenceProductUrl.isBlank()) throw new IllegalArgumentException("referenceProductUrl must not be blank");
-        if (minMarginInCents < 0) throw new IllegalArgumentException("minMarginInCents must not be negative");
-        if (minAiConfidence < 0 || minAiConfidence > 1)
-            throw new IllegalArgumentException("minAiConfidence must lie within 0..1");
-        if (maxPhotos < 1) throw new IllegalArgumentException("maxPhotos must be at least 1");
-    }
+public record RebuySettings(@NotBlank String referenceProductUrl,
+                            @PositiveOrZero int minMarginInCents,
+                            @DecimalMin("0") @DecimalMax("1") double minAiConfidence,
+                            @Min(1) int maxPhotos) {
 }

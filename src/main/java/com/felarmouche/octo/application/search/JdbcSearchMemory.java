@@ -103,13 +103,10 @@ public class JdbcSearchMemory implements SearchMemory {
     @Override
     public void saveStatus(String searchId, RunStatus status) {
         jdbc.sql("""
-                        insert into search (id, last_run_at, last_run_ok, last_run_messages)
-                        values (?, ?, ?, cast(? as jsonb))
-                        on conflict (id) do update set last_run_at = excluded.last_run_at,
-                                                       last_run_ok = excluded.last_run_ok,
-                                                       last_run_messages = excluded.last_run_messages""")
-                .params(searchId, Timestamp.from(status.finishedAt()), status.ok(),
-                        JSON.writeValueAsString(status.messages()))
+                        update search set last_run_at = ?, last_run_ok = ?, last_run_messages = cast(? as jsonb)
+                        where id = ?""")
+                .params(Timestamp.from(status.finishedAt()), status.ok(),
+                        JSON.writeValueAsString(status.messages()), searchId)
                 .update();
     }
 

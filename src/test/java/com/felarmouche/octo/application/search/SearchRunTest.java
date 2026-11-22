@@ -64,6 +64,11 @@ class SearchRunTest {
     @BeforeEach
     void setUp() {
         run = new SearchRun(memory, Clock.fixed(NOW, ZoneOffset.UTC));
+        // seen and history belong to a stored Search; the run takes its definition from the Search record
+        jdbc.sql("""
+                insert into search (id, active, name, listing_type, type_filter, exclusion, finders, notifiers,
+                                    retention, created_at)
+                values ('search-1', true, 'test', 'generic', '{}', '{}', '[]', '[]', '{}', now())""").update();
     }
 
     @Test

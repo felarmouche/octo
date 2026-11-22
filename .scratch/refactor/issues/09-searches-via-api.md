@@ -15,15 +15,18 @@ See spec "Search aggregate", "Plugin Settings mechanism" and "HTTP API", and use
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] CRUD endpoints plus pause and resume; paused Searches don't run
-- [ ] Edits apply from the next run, and the Search keeps what it has seen
-- [ ] Deleting a Search removes its Listing History and seen Fingerprints
-- [ ] Changing the Listing Type of an existing Search is refused
-- [ ] Notifier slots carry the Decisions they report
-- [ ] API-seam tests (Spring Boot + Testcontainers) cover the points above and authentication
+- [x] CRUD endpoints plus pause and resume; paused Searches don't run
+- [x] Edits apply from the next run, and the Search keeps what it has seen
+- [x] Deleting a Search removes its Listing History and seen Fingerprints
+- [x] Changing the Listing Type of an existing Search is refused
+- [x] Notifier slots carry the Decisions they report
+- [x] API-seam tests (Spring Boot + Testcontainers) cover the points above and authentication
 
 ## Comments
 
 - From 08: `seen_fingerprint` and `listing_history` have no foreign key to `search` yet, because the in-code Searches get their `search` row only when the first run status is saved. When Searches are stored here, add `references search (id) on delete cascade` to both, so "deleted with the Search" holds in the schema.
+- Done: `search` holds the definition (jsonb slots, filters, retention) and `seen_fingerprint` / `listing_history` reference it with `on delete cascade`. V2 drops the rows of the former in-code Search, which had no definition.
+- For 10: `SearchRunner` still runs all active Searches on `octo.searches.interval`; `octo.searches.first-run-after` delays the first run (tests set it to a day).
+- For 11: settings records now carry Bean Validation constraints, which the schema generator can read; `PluginRegistry` and `ListingTypes` are the registries to list from.

@@ -22,7 +22,7 @@ public interface SearchMemory {
     /** The Listing History in the order it was recorded. */
     List<JudgedListing> history(String searchId);
 
-    /** Replaces the Search's last run status. */
+    /** Replaces the Search's last run status. Does nothing when the Search was deleted meanwhile. */
     void saveStatus(String searchId, RunStatus status);
 
     /** Empty until the Search has run once. */

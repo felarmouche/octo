@@ -141,5 +141,5 @@ Secrets are never committed.
 
 These are the places where the test setup differs from the target:
 
-- The Searches are built in code (`InCodeSearches`) and share one global interval, and the Telegram chat comes from one global property. Target: Searches come from storage, each with its own Schedule and its own Notifier settings.
+- The stored Searches all run one after the other on one global interval. Target: each Search runs on its own Schedule.
 - The Telegram bot token is committed in `application.properties`. Target: revoke it and load it from an environment variable.
