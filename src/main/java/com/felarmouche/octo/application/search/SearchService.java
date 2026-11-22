@@ -138,6 +138,12 @@ public class SearchService {
         return repository.findById(id).map(SearchRow::toStored);
     }
 
+    /** The Search's Listing History, newest first. */
+    public List<JudgedListing> history(String id) {
+        if (!repository.existsById(id)) throw new SearchNotFoundException(id);
+        return memory.history(id).reversed();
+    }
+
     /** Oldest first. */
     public List<StoredSearch> list() {
         return repository.findAllByOrderByCreatedAtAscIdAsc().stream().map(SearchRow::toStored).toList();
@@ -158,8 +164,7 @@ public class SearchService {
 
     private Search build(String id, SearchDefinition d) {
         if (d.name() == null || d.name().isBlank()) throw new InvalidSettingsException("name", "must not be blank");
-        ListingType<?> type = listingTypes.find(d.listingType())
-                .orElseThrow(() -> new InvalidSettingsException("listingType", "unknown Listing Type: " + d.listingType()));
+        ListingType<?> type = listingTypes.require(d.listingType());
 
         Search.TypeSlot<?> typeSlot = typeSlot(type, d.typeFilter());
         ExclusionFilterSettings exclusion = codec.decode(d.exclusion(), ExclusionFilterSettings.class, "exclusion");

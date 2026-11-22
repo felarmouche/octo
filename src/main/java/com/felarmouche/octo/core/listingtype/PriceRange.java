@@ -1,6 +1,7 @@
 package com.felarmouche.octo.core.listingtype;
 
 import com.felarmouche.octo.core.domain.Listing;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.util.Optional;
@@ -9,7 +10,8 @@ import java.util.Optional;
  * An optional price range of a Listing Type Filter. Either bound may be null (open).
  * A Listing without a price passes.
  */
-public record PriceRange(@PositiveOrZero Integer minInCents, @PositiveOrZero Integer maxInCents) {
+public record PriceRange(@Schema(title = "Mindestpreis (Cent)") @PositiveOrZero Integer minInCents,
+                         @Schema(title = "Höchstpreis (Cent)") @PositiveOrZero Integer maxInCents) {
 
     public static final PriceRange ANY = new PriceRange(null, null);
 

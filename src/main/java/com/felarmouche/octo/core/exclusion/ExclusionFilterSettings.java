@@ -1,5 +1,7 @@
 package com.felarmouche.octo.core.exclusion;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 import java.util.Set;
 
@@ -9,7 +11,10 @@ import java.util.Set;
  * @param words   the user's own excluded words; blank ones are ignored
  * @param presets ids of the selected Exclusion Presets
  */
-public record ExclusionFilterSettings(List<String> words, Set<String> presets) {
+public record ExclusionFilterSettings(
+        @Schema(title = "Ausgeschlossene Wörter") List<String> words,
+        @Schema(title = "Ausschluss-Vorlagen", description = "Ids der Exclusion Presets des Listing Types")
+        Set<String> presets) {
 
     public static final ExclusionFilterSettings NONE = new ExclusionFilterSettings(null, null);
 

@@ -2,7 +2,7 @@
 
 This document describes what Octo is meant to be: the idea, the rules we design by, how the user works with it, and how a Search runs. Terms in **bold** are defined in [`GLOSSARY.md`](../GLOSSARY.md).
 
-Much of the current code was built for testing (hardcoded Search, settings in `application.properties`). Where code and this document disagree, this document describes the target. See [Gaps to the current code](#gaps-to-the-current-code).
+Where code and this document disagree, this document describes the target.
 
 ## The idea
 
@@ -136,9 +136,3 @@ Secrets are never committed.
 - Chains of several Evaluators
 - Finder-specific filters
 - Shared default settings across Searches
-
-## Gaps to the current code
-
-These are the places where the test setup differs from the target:
-
-- The Telegram bot token is committed in `application.properties`. Target: revoke it and load it from an environment variable.

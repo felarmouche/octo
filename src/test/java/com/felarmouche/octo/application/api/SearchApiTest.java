@@ -3,8 +3,12 @@ package com.felarmouche.octo.application.api;
 import com.felarmouche.octo.TestcontainersConfiguration;
 import com.felarmouche.octo.application.search.SearchRunner;
 import com.felarmouche.octo.core.domain.Alert;
+import com.felarmouche.octo.core.domain.Decision;
+import com.felarmouche.octo.core.domain.LabelledValue;
+import com.felarmouche.octo.core.domain.Verdict;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.listingtype.ListingType;
+import com.felarmouche.octo.core.plugin.Evaluator;
 import com.felarmouche.octo.core.plugin.Finder;
 import com.felarmouche.octo.core.plugin.Notifier;
 import com.felarmouche.octo.types.generic.GenericListingType;
@@ -382,6 +386,47 @@ class SearchApiTest {
         joinAll(first);
     }
 
+    // --- Listing History -----------------------------------------------------------------------
+
+    @Test
+    void theListingHistoryIsNewestFirstWithDecisionReasonAndDetails() {
+        String withEvaluator = ps5Search().replace("\"notifiers\":",
+                "\"evaluator\": {\"plugin\": \"fake-evaluator\", \"settings\": {}}, \"notifiers\":");
+        String id = id(post("/api/searches", withEvaluator));
+        finder.offers.put("ps5", List.of(listing("PS5 defekt", 100_00)));
+        runDue();
+        finder.offers.put("ps5", List.of(listing("PS5 Disc", 240_00)));
+        clock.advance(Duration.ofMinutes(5));
+        runDue();
+
+        assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$[*].listing.title", v -> v.assertThat().asList().containsExactly("PS5 Disc", "PS5 defekt"))
+                .hasPathSatisfying("$[0].listing.priceInCents", v -> v.assertThat().isEqualTo(240_00))
+                .hasPathSatisfying("$[0].verdict.decision", v -> v.assertThat().isEqualTo("BUY"))
+                .hasPathSatisfying("$[0].verdict.reason", v -> v.assertThat().isEqualTo("Marge reicht"))
+                .hasPathSatisfying("$[0].verdict.details", v -> v.assertThat()
+                        .isEqualTo(List.of(Map.of("label", "Marge", "value", "50 €"))))
+                .hasPathSatisfying("$[1].verdict.decision", v -> v.assertThat().isEqualTo("NO_BUY"))
+                .hasPathSatisfying("$[1].verdict.reason", v -> v.assertThat().asString().contains("defekt"));
+    }
+
+    @Test
+    void theListingHistoryShowsAttributesAsTheListingTypeLabelsThem() {
+        String id = id(post("/api/searches", ps5Search().replace("\"listingType\": \"generic\"", "\"listingType\": \"phone\"")));
+        finder.offers.put("ps5", List.of(listing("iPhone 15 128GB", 240_00)));
+        runDue();
+
+        assertThat(get("/api/searches/" + id + "/history")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$[0].display", v -> v.assertThat()
+                        .isEqualTo(List.of(Map.of("label", "Speicher", "value", "128 GB"))))
+                .hasPathSatisfying("$[0].listing.attributes.storage", v -> v.assertThat().isEqualTo("GB_128"));
+    }
+
+    @Test
+    void theListingHistoryOfAnUnknownSearchIsNotFound() {
+        assertThat(get("/api/searches/nope/history")).hasStatus(HttpStatus.NOT_FOUND);
+    }
+
     // --- helpers -------------------------------------------------------------------------------
 
     /** One scheduler tick, waiting until the Searches it started have finished. */
@@ -481,6 +526,11 @@ class SearchApiTest {
         }
 
         @Bean
+        FakeEvaluator fakeEvaluator() {
+            return new FakeEvaluator();
+        }
+
+        @Bean
         RecordingNotifier recordingNotifier() {
             return new RecordingNotifier();
         }
@@ -535,6 +585,32 @@ class SearchApiTest {
         @Override
         public Class<FakeFinderSettings> settingsType() {
             return FakeFinderSettings.class;
+        }
+    }
+
+    record FakeEvaluatorSettings() {
+    }
+
+    /** Buys everything and says why, with one evaluation detail. */
+    static class FakeEvaluator implements Evaluator<FakeEvaluatorSettings> {
+        @Override
+        public Verdict evaluate(Listing listing, FakeEvaluatorSettings settings) {
+            return new Verdict(Decision.BUY, "Marge reicht", List.of(new LabelledValue("Marge", "50 €")));
+        }
+
+        @Override
+        public String id() {
+            return "fake-evaluator";
+        }
+
+        @Override
+        public Set<String> listingTypes() {
+            return Set.of(GenericListingType.ID);
+        }
+
+        @Override
+        public Class<FakeEvaluatorSettings> settingsType() {
+            return FakeEvaluatorSettings.class;
         }
     }
 

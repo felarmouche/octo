@@ -1,6 +1,7 @@
 package com.felarmouche.octo.types.phone;
 
 import com.felarmouche.octo.core.listingtype.PriceRange;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -15,8 +16,11 @@ import java.util.Set;
  * @param storages   allowed storage sizes; empty or null means all
  * @param conditions allowed Phone Conditions; empty or null means all
  */
-public record PhoneFilterSettings(@Valid PriceRange price, @Min(0) @Max(100) Integer minBattery, Set<Storage> storages,
-                                  Set<PhoneCondition> conditions) {
+public record PhoneFilterSettings(
+        @Schema(title = "Preis") @Valid PriceRange price,
+        @Schema(title = "Mindest-Akku (%)") @Min(0) @Max(100) Integer minBattery,
+        @Schema(title = "Erlaubte Speichergrößen") Set<Storage> storages,
+        @Schema(title = "Erlaubte Zustände") Set<PhoneCondition> conditions) {
 
     public static final PhoneFilterSettings NONE = new PhoneFilterSettings(null, null, null, null);
 
