@@ -31,6 +31,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>types and required fields from the record (primitives are required, like {@link SettingsCodec} decodes them),</li>
  *   <li>constraints from its Bean Validation annotations,</li>
  *   <li>labels ({@code title}) and initial values ({@code default}) from {@code @Schema(title, defaultValue)},</li>
+ *   <li>the input a frontend shows ({@code format}) from {@code @Schema(format)}, e.g. {@code money-cents}
+ *       for an integer amount in cents that a frontend edits in euros,</li>
  *   <li>enum value labels ({@code oneOf} of {@code const} and {@code title}) from the enum's {@code label()} method.</li>
  * </ul>
  */
@@ -48,7 +50,11 @@ public class SettingsSchema {
         // before the Swagger module, whose default is always a string
         config.forFields()
                 .withDefaultResolver(SettingsSchema::typedDefault)
-                .withRequiredCheck(field -> field.getType().getErasedType().isPrimitive());
+                .withRequiredCheck(field -> field.getType().getErasedType().isPrimitive())
+                .withInstanceAttributeOverride((attributes, field, context) -> {
+                    Schema schema = field.getAnnotationConsideringFieldAndGetter(Schema.class);
+                    if (schema != null && !schema.format().isEmpty()) attributes.put("format", schema.format());
+                });
         config.forTypesInGeneral().withCustomDefinitionProvider((type, context) -> {
             Class<?> erased = type.getErasedType();
             return erased.isEnum() ? labelledEnum(erased, context.getGeneratorConfig().createObjectNode()) : null;

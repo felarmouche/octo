@@ -19,6 +19,11 @@ public class GenericListingType implements ListingType<GenericFilterSettings> {
     }
 
     @Override
+    public String title() {
+        return "Allgemein";
+    }
+
+    @Override
     public Class<GenericFilterSettings> filterSettingsType() {
         return GenericFilterSettings.class;
     }

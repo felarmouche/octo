@@ -17,6 +17,9 @@ public interface ListingType<F extends Record> {
 
     String id();
 
+    /** The German name a frontend shows, e.g. "Handy". */
+    String title();
+
     Class<F> filterSettingsType();
 
     /** Fills unknown attributes from title and description. Applied to every found Listing. */

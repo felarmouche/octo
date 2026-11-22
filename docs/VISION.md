@@ -16,7 +16,7 @@ The frontend is served from the same origin as the API and logs in against the b
 
 1. **Simple over clever.** This is the top rule. When in doubt, pick the solution with fewer concepts, fewer classes and fewer settings. Don't build for hypothetical future needs.
 2. **Configurable, without being configurable everywhere.** Everything a user might reasonably want to tune per Search is a setting. Everything else is a sensible fixed behaviour.
-3. **All Plugins look alike.** Every Plugin has an id, the Listing Types it supports, and its own typed **Plugin Settings**. Learning one Plugin means knowing them all.
+3. **All Plugins look alike.** Every Plugin has an id, a German title, the Listing Types it supports, and its own typed **Plugin Settings**. Learning one Plugin means knowing them all.
 4. **Logic lives in the backend.** The frontend asks the backend which Plugins exist and what their settings look like, and renders forms from that. The frontend has no knowledge of Kleinanzeigen, phones or Rebuy.
 5. **Every run is the same.** A Search always goes through the same fixed steps in the same order. Plugins fill steps; they don't change the flow.
 6. **Cheap before expensive.** Steps are ordered so that scraping and AI calls only happen for Listings that survived the cheap checks.

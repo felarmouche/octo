@@ -37,6 +37,11 @@ public class PhoneListingType implements ListingType<PhoneFilterSettings> {
     }
 
     @Override
+    public String title() {
+        return "Handy";
+    }
+
+    @Override
     public Class<PhoneFilterSettings> filterSettingsType() {
         return PhoneFilterSettings.class;
     }

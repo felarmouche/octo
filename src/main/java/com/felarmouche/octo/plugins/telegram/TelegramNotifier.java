@@ -109,6 +109,11 @@ public class TelegramNotifier implements Notifier<TelegramSettings> {
     }
 
     @Override
+    public String title() {
+        return "Telegram";
+    }
+
+    @Override
     public Class<TelegramSettings> settingsType() {
         return TelegramSettings.class;
     }

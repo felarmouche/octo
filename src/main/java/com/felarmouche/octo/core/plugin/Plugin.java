@@ -12,6 +12,9 @@ public interface Plugin<S extends Record> {
 
     String id();
 
+    /** The German name a frontend shows, e.g. "Kleinanzeigen". */
+    String title();
+
     /** The ids of the Listing Types this Plugin supports. */
     Set<String> listingTypes();
 

@@ -44,6 +44,11 @@ public class RebuyEvaluator implements Evaluator<RebuySettings> {
     }
 
     @Override
+    public String title() {
+        return "Rebuy";
+    }
+
+    @Override
     public Set<String> listingTypes() {
         return Set.of(PhoneListingType.ID);
     }

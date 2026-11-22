@@ -201,6 +201,11 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
     }
 
     @Override
+    public String title() {
+        return "Kleinanzeigen";
+    }
+
+    @Override
     public Set<String> listingTypes() {
         return Set.of(GenericListingType.ID, PhoneListingType.ID);
     }

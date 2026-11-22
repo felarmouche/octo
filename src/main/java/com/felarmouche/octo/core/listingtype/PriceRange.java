@@ -10,8 +10,8 @@ import java.util.Optional;
  * An optional price range of a Listing Type Filter. Either bound may be null (open).
  * A Listing without a price passes.
  */
-public record PriceRange(@Schema(title = "Mindestpreis (Cent)") @PositiveOrZero Integer minInCents,
-                         @Schema(title = "Höchstpreis (Cent)") @PositiveOrZero Integer maxInCents) {
+public record PriceRange(@Schema(title = "Mindestpreis", format = "money-cents") @PositiveOrZero Integer minInCents,
+                         @Schema(title = "Höchstpreis", format = "money-cents") @PositiveOrZero Integer maxInCents) {
 
     public static final PriceRange ANY = new PriceRange(null, null);
 

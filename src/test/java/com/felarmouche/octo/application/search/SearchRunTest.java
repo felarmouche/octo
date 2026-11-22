@@ -541,6 +541,11 @@ class SearchRunTest {
         }
 
         @Override
+        public String title() {
+            return "Test";
+        }
+
+        @Override
         public Set<String> listingTypes() {
             return Set.of(GenericListingType.ID);
         }
@@ -575,6 +580,11 @@ class SearchRunTest {
         }
 
         @Override
+        public String title() {
+            return "Test";
+        }
+
+        @Override
         public Set<String> listingTypes() {
             return Set.of(GenericListingType.ID);
         }
@@ -598,6 +608,11 @@ class SearchRunTest {
         @Override
         public String id() {
             return "recording-notifier";
+        }
+
+        @Override
+        public String title() {
+            return "Test";
         }
 
         @Override

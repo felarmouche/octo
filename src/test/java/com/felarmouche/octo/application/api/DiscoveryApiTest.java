@@ -44,6 +44,15 @@ class DiscoveryApiTest {
     }
 
     @Test
+    void listingTypesAndPluginsHaveGermanTitles() {
+        assertThat(get("/api/listing-types")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$[*].title", v -> v.assertThat().asList().containsExactly("Handy", "Allgemein"));
+        assertThat(get("/api/plugins")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$[*].title", v -> v.assertThat().asList()
+                        .containsExactly("Kleinanzeigen", "Rebuy", "Telegram"));
+    }
+
+    @Test
     void aListingTypesFilterSchemaHasOptionalFieldsWithConstraintsAndLabelledValues() {
         assertThat(get("/api/listing-types")).hasStatusOk().bodyJson()
                 .doesNotHavePath("$[0].filterSettingsSchema.required")
@@ -71,6 +80,17 @@ class DiscoveryApiTest {
     }
 
     @Test
+    void theExclusionSchemaOffersExactlyThePresetsOfItsListingType() {
+        assertThat(get("/api/listing-types")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$[0].exclusionSchema.properties.presets.uniqueItems", v -> v.assertThat().isEqualTo(true))
+                .hasPathSatisfying("$[0].exclusionSchema.properties.presets.items.oneOf", v -> v.assertThat().asList()
+                        .containsExactly(Map.of("const", "wanted-swap", "title", "Gesuche / Tausch"),
+                                Map.of("const", "damage", "title", "Schäden")))
+                .hasPathSatisfying("$[1].exclusionSchema.properties.presets.items.oneOf", v -> v.assertThat().asList()
+                        .containsExactly(Map.of("const", "wanted-swap", "title", "Gesuche / Tausch")));
+    }
+
+    @Test
     void pluginsForAListingTypeAreOnlyTheCompatibleOnes() {
         assertThat(get("/api/plugins?listingType=generic")).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$[*].id", v -> v.assertThat().asList()
@@ -89,6 +109,29 @@ class DiscoveryApiTest {
                         .containsExactly("kleinanzeigen-finder", "rebuy-evaluator", "telegram-notifier"))
                 .hasPathSatisfying("$[?(@.id == 'rebuy-evaluator')].listingTypes[*]",
                         v -> v.assertThat().asList().containsExactly("phone"));
+    }
+
+    @Test
+    void amountsInCentsAreIntegersMarkedAsMoney() {
+        String price = "$[*].filterSettingsSchema.properties.price.properties";
+        assertThat(get("/api/listing-types")).hasStatusOk().bodyJson()
+                .hasPathSatisfying(price + ".minInCents.type", v -> v.assertThat().asList()
+                        .containsExactly("integer", "integer"))
+                .hasPathSatisfying(price + ".minInCents.format", v -> v.assertThat().asList()
+                        .containsExactly("money-cents", "money-cents"))
+                .hasPathSatisfying(price + ".minInCents.title", v -> v.assertThat().asList()
+                        .containsExactly("Mindestpreis", "Mindestpreis"))
+                .hasPathSatisfying(price + ".maxInCents.type", v -> v.assertThat().asList()
+                        .containsExactly("integer", "integer"))
+                .hasPathSatisfying(price + ".maxInCents.format", v -> v.assertThat().asList()
+                        .containsExactly("money-cents", "money-cents"))
+                .hasPathSatisfying(price + ".maxInCents.title", v -> v.assertThat().asList()
+                        .containsExactly("Höchstpreis", "Höchstpreis"));
+        String margin = "$[?(@.id == 'rebuy-evaluator')].settingsSchema.properties.minMarginInCents";
+        assertThat(get("/api/plugins")).hasStatusOk().bodyJson()
+                .hasPathSatisfying(margin + ".type", v -> v.assertThat().asList().containsExactly("integer"))
+                .hasPathSatisfying(margin + ".format", v -> v.assertThat().asList().containsExactly("money-cents"))
+                .hasPathSatisfying(margin + ".title", v -> v.assertThat().asList().containsExactly("Mindestgewinn"));
     }
 
     @Test

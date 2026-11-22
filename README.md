@@ -16,8 +16,8 @@ Everything except login and logout needs a session. `POST /api/login` with `{"us
 | --- | --- |
 | `POST /api/login`, `POST /api/logout` | open and end the session |
 | `GET /api/session` | `200` while logged in, `401` otherwise |
-| `GET /api/listing-types` | Listing Types with the schemas of their Listing Type Filter and of the Exclusion Filter, and their Exclusion Presets |
-| `GET /api/plugins?listingType=phone` | the Plugins a Search of that Listing Type can use, with kind and settings schema; without `listingType` all Plugins |
+| `GET /api/listing-types` | Listing Types with their German title, the schemas of their Listing Type Filter and of the Exclusion Filter (offering exactly their Exclusion Presets), and those presets |
+| `GET /api/plugins?listingType=phone` | the Plugins a Search of that Listing Type can use, with German title, kind and settings schema; without `listingType` all Plugins |
 | `GET`, `POST /api/searches` | list and create Searches |
 | `GET`, `PUT`, `DELETE /api/searches/{id}` | read, edit, delete a Search |
 | `POST /api/searches/{id}/pause`, `/resume` | pause and resume |
@@ -43,10 +43,12 @@ A Plugin is one settings record plus one class. Nothing else in Octo changes. Se
    ```
    - Bean Validation annotations are checked on save and before every run, and show up as schema constraints.
    - `@Schema(title, description, defaultValue)` gives the label, help text and initial value.
+   - An amount in cents is an integer named `...InCents` with `@Schema(format = "money-cents")`. The frontend shows a euro input and sends cents, so the title has no "(Cent)".
    - Primitive fields are required. Use a wrapper type (`Integer`) for an optional number.
    - An enum shows its values with labels if it has a `String label()` method.
 2. **Write the Plugin class**: a `@Component` implementing `Finder`, `Evaluator` or `Notifier`, with
    - `id()`: unique, e.g. `example-finder`,
+   - `title()`: the German name the frontend shows, e.g. `Beispiel`,
    - `listingTypes()`: the ids of the Listing Types it supports (Notifiers support all),
    - `settingsType()`: the record from step 1,
    - the method of its kind, which gets the Search's settings on every call.

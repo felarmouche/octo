@@ -574,6 +574,11 @@ class SearchApiTest {
         }
 
         @Override
+        public String title() {
+            return "Test";
+        }
+
+        @Override
         public Set<String> listingTypes() {
             return Set.of(GenericListingType.ID, PhoneListingType.ID);
         }
@@ -597,6 +602,11 @@ class SearchApiTest {
         @Override
         public String id() {
             return "fake-evaluator";
+        }
+
+        @Override
+        public String title() {
+            return "Test";
         }
 
         @Override
@@ -628,6 +638,11 @@ class SearchApiTest {
         @Override
         public String id() {
             return "recording-notifier";
+        }
+
+        @Override
+        public String title() {
+            return "Test";
         }
 
         @Override

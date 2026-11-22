@@ -16,7 +16,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 public record RebuySettings(
         @Schema(title = "Rebuy-Produktseite", description = "Das Referenzprodukt, mit dem Anzeigen verglichen werden")
         @NotBlank String referenceProductUrl,
-        @Schema(title = "Mindestgewinn (Cent)", defaultValue = "2000")
+        @Schema(title = "Mindestgewinn", format = "money-cents", defaultValue = "2000")
         @PositiveOrZero int minMarginInCents,
         @Schema(title = "Mindestsicherheit der KI (0–1)", description = "Darunter wird die Anzeige UNSURE",
                 defaultValue = "0.7")

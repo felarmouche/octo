@@ -13,8 +13,7 @@ import java.util.Set;
  */
 public record ExclusionFilterSettings(
         @Schema(title = "Ausgeschlossene Wörter") List<String> words,
-        @Schema(title = "Ausschluss-Vorlagen", description = "Ids der Exclusion Presets des Listing Types")
-        Set<String> presets) {
+        @Schema(title = "Ausschluss-Vorlagen") Set<String> presets) {
 
     public static final ExclusionFilterSettings NONE = new ExclusionFilterSettings(null, null);
 
