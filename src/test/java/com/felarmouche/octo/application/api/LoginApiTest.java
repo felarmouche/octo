@@ -99,7 +99,16 @@ class LoginApiTest {
             assertThat(response.statusCode()).isEqualTo(UNAUTHORIZED);
             assertThat(response.headers().firstValue("WWW-Authenticate")).isEmpty();
             assertThat(response.headers().firstValue("Set-Cookie")).isEmpty();
+            assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
+                    type -> assertThat(type).startsWith("application/json"));
+            assertThat(response.body()).isEqualTo("{\"errors\":[{\"message\":\"not logged in\"}]}");
         }
+    }
+
+    @Test
+    void aWrongLoginBelongsToNoField() throws Exception {
+        assertThat(login("octo", "wrong", null).body())
+                .isEqualTo("{\"errors\":[{\"message\":\"wrong username or password\"}]}");
     }
 
     private HttpResponse<String> timedLogin(String user, String password) throws Exception {

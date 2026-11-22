@@ -4,9 +4,9 @@
 
 **Blocked by:** None (can start immediately). 05 is wontfix.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] 400, 401, 403, 404 and 500 all return `{errors:[{field?, message}]}`
-- [ ] Unknown `listingType` and other non-field input errors return 400 without a `field`
-- [ ] Invalid input that slips past validation returns 400, not 500
-- [ ] API tests cover each status
+- [x] 400, 401, 403, 404 and 500 all return `{errors:[{field?, message}]}`
+- [x] Unknown `listingType` and other non-field input errors return 400 without a `field`
+- [x] Invalid input that slips past validation returns 400, not 500
+- [x] API tests cover each status
