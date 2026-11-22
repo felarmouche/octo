@@ -7,6 +7,9 @@ services:
       POSTGRES_DB: octo
       POSTGRES_USER: octo
       POSTGRES_PASSWORD: ${DB_PASSWORD:-octo}
+    # Published for running Octo locally (IDE / bootRun) against it: `docker compose up -d postgres`
+    ports:
+      - "127.0.0.1:5432:5432" # localhost only, never reachable from outside
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
