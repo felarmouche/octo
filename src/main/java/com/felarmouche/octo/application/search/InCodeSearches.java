@@ -1,6 +1,8 @@
 package com.felarmouche.octo.application.search;
 
 import com.felarmouche.octo.core.domain.Decision;
+import com.felarmouche.octo.core.exclusion.ExclusionFilterSettings;
+import com.felarmouche.octo.core.exclusion.ExclusionPreset;
 import com.felarmouche.octo.plugins.kleinanzeigen.KleinanzeigenFinder;
 import com.felarmouche.octo.plugins.kleinanzeigen.KleinanzeigenSettings;
 import com.felarmouche.octo.plugins.telegram.TelegramNotifier;
@@ -32,6 +34,7 @@ public class InCodeSearches {
                 "ps5-under-250",
                 "PS5 unter 250 €",
                 new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE),
+                new ExclusionFilterSettings(List.of(), Set.of(ExclusionPreset.WANTED_SWAP.id())),
                 List.of(new Search.FinderSlot<>(kleinanzeigen,
                         new KleinanzeigenSettings("https://www.kleinanzeigen.de/s-preis::250/ps5/k0", 20))),
                 Optional.empty(),

@@ -2,7 +2,9 @@ package com.felarmouche.octo.core.listingtype;
 
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
+import com.felarmouche.octo.core.exclusion.ExclusionPreset;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,4 +30,14 @@ public interface ListingType<F extends Record> {
 
     /** The Listing's attributes as labelled values for Alerts. */
     List<LabelledValue> describe(Listing listing);
+
+    /** The Exclusion Presets this Listing Type offers, besides the common ones. */
+    List<ExclusionPreset> exclusionPresets();
+
+    /** The presets a Search of this Listing Type can select: the common ones, then its own. */
+    default List<ExclusionPreset> availableExclusionPresets() {
+        List<ExclusionPreset> available = new ArrayList<>(ExclusionPreset.COMMON);
+        available.addAll(exclusionPresets());
+        return List.copyOf(available);
+    }
 }

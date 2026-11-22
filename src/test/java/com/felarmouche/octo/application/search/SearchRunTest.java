@@ -7,6 +7,7 @@ import com.felarmouche.octo.core.domain.Decision;
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.domain.Verdict;
+import com.felarmouche.octo.core.exclusion.ExclusionFilterSettings;
 import com.felarmouche.octo.core.listingtype.ListingType;
 import com.felarmouche.octo.core.listingtype.PriceRange;
 import com.felarmouche.octo.core.plugin.Evaluator;
@@ -34,6 +35,8 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
@@ -235,7 +238,7 @@ class SearchRunTest {
         var notifier = new RecordingNotifier();
         Search search = new Search("search-1", "PS5",
                 new Search.TypeSlot<>(new GenericListingType(),
-                        new GenericFilterSettings(new PriceRange(100_00, 250_00))),
+                        new GenericFilterSettings(new PriceRange(100_00, 250_00))), ExclusionFilterSettings.NONE,
                 List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY, Decision.NO_BUY)));
 
         run.run(search);
@@ -315,11 +318,50 @@ class SearchRunTest {
                 new LabelledValue("Rebuy zahlt", "310 €"));
     }
 
+    @Test
+    void exclusionRunsBeforeTheListingTypeFilterAndItsRejectionsAreRecordedAndRememberedAsSeen() {
+        var finder = new FakeFinder("phones", List.of(
+                listing("iPhone 13", "Display gesprungen, Akkukapazität: 74 %", 300_00, "broken-and-weak"),
+                listing("iPhone 13", "Mietkauf möglich", 300_00, "own-word"),
+                listing("iPhone 13", "Akkukapazität: 74 %", 300_00, "weak"),
+                listing("iPhone 13", "Kein Riss, Panzerglas gesprungen", 300_00, "good")));
+        var notifier = new RecordingNotifier();
+        Search search = new Search("search-1", "iPhone 13",
+                new Search.TypeSlot<>(new PhoneListingType(), new PhoneFilterSettings(null, 80, null, null)),
+                new ExclusionFilterSettings(List.of("Mietkauf"), Set.of("damage")),
+                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY)));
+
+        run.run(search);
+        run.run(search);
+
+        assertThat(memory.history("search-1"))
+                .extracting(j -> j.listing().externalId(), j -> j.verdict().decision(), j -> j.verdict().reason())
+                .containsExactly(
+                        tuple("broken-and-weak", Decision.NO_BUY, "Display beschädigt (\"Display gesprungen\")"),
+                        tuple("own-word", Decision.NO_BUY, "Ausschlusswort (\"Mietkauf\")"),
+                        tuple("weak", Decision.NO_BUY, "Akku 74 % < 80 %"),
+                        tuple("good", Decision.BUY, "Alle Filter bestanden"));
+    }
+
+    @Test
+    void aSearchCanOnlySelectPresetsOfItsOwnListingTypeOrCommonOnes() {
+        var genericType = new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE);
+
+        assertThatThrownBy(() -> new Search("search-1", "PS5", genericType,
+                new ExclusionFilterSettings(List.of(), Set.of("damage")), List.of(), Optional.empty(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("damage");
+        assertThatCode(() -> new Search("search-1", "PS5", genericType,
+                new ExclusionFilterSettings(List.of(), Set.of("wanted-swap")), List.of(), Optional.empty(), List.of()))
+                .doesNotThrowAnyException();
+    }
+
     // --- helpers -----------------------------------------------------------------------------
 
     private static Search phoneSearch(PhoneFilterSettings filter, FakeFinder finder,
                                       Optional<Search.EvaluatorSlot<?>> evaluator, RecordingNotifier notifier) {
         return new Search("search-1", "iPhone 13", new Search.TypeSlot<>(new PhoneListingType(), filter),
+                ExclusionFilterSettings.NONE,
                 List.of(slot(finder)), evaluator, List.of(slot(notifier, Decision.BUY)));
     }
 
@@ -345,7 +387,8 @@ class SearchRunTest {
                                  Optional<Search.EvaluatorSlot<?>> evaluator,
                                  List<NotifierSlot<?>> notifiers) {
         return new Search("search-1", "PS5 unter 250 €",
-                new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE), finders, evaluator, notifiers);
+                new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE), ExclusionFilterSettings.NONE,
+                finders, evaluator, notifiers);
     }
 
     private static FinderSlot<?> slot(FakeFinder finder) {

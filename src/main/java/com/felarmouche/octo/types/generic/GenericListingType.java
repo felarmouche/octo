@@ -2,6 +2,7 @@ package com.felarmouche.octo.types.generic;
 
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
+import com.felarmouche.octo.core.exclusion.ExclusionPreset;
 import com.felarmouche.octo.core.listingtype.ListingType;
 
 import java.util.List;
@@ -30,6 +31,11 @@ public class GenericListingType implements ListingType<GenericFilterSettings> {
     @Override
     public Optional<String> reject(Listing listing, GenericFilterSettings filterSettings) {
         return filterSettings.price().reject(listing);
+    }
+
+    @Override
+    public List<ExclusionPreset> exclusionPresets() {
+        return List.of();
     }
 
     @Override

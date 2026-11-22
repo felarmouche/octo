@@ -2,6 +2,7 @@ package com.felarmouche.octo.types.phone;
 
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
+import com.felarmouche.octo.core.exclusion.ExclusionPreset;
 import com.felarmouche.octo.core.listingtype.ListingType;
 
 import java.util.ArrayList;
@@ -92,6 +93,11 @@ public class PhoneListingType implements ListingType<PhoneFilterSettings> {
             return Optional.of("Zustand " + phone.condition().get().label() + " nicht erlaubt");
         }
         return Optional.empty();
+    }
+
+    @Override
+    public List<ExclusionPreset> exclusionPresets() {
+        return List.of(PhoneDamagePreset.DAMAGE);
     }
 
     @Override

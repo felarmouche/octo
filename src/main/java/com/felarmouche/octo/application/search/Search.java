@@ -5,6 +5,8 @@ import com.felarmouche.octo.core.domain.Decision;
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.domain.Verdict;
+import com.felarmouche.octo.core.exclusion.ExclusionFilter;
+import com.felarmouche.octo.core.exclusion.ExclusionFilterSettings;
 import com.felarmouche.octo.core.listingtype.ListingType;
 import com.felarmouche.octo.core.plugin.Evaluator;
 import com.felarmouche.octo.core.plugin.Finder;
@@ -23,16 +25,29 @@ public record Search(
         String id,
         String name,
         TypeSlot<?> type,
+        ExclusionFilterSettings exclusion,
         List<FinderSlot<?>> finders,
         Optional<EvaluatorSlot<?>> evaluator,
         List<NotifierSlot<?>> notifiers) {
 
+    /** @throws IllegalArgumentException when a selected Exclusion Preset is not offered for the Listing Type */
     public Search {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
+        exclusion = exclusion == null ? ExclusionFilterSettings.NONE : exclusion;
+        exclusionFilter(type, exclusion);
         finders = List.copyOf(finders);
         evaluator = evaluator == null ? Optional.empty() : evaluator;
         notifiers = List.copyOf(notifiers);
+    }
+
+    /** The Exclusion Filter of this Search, built once per run. */
+    ExclusionFilter exclusionFilter() {
+        return exclusionFilter(type, exclusion);
+    }
+
+    private static ExclusionFilter exclusionFilter(TypeSlot<?> type, ExclusionFilterSettings exclusion) {
+        return ExclusionFilter.of(exclusion, type.listingType().availableExclusionPresets());
     }
 
     /** The Search's Listing Type and the settings of its Listing Type Filter. */

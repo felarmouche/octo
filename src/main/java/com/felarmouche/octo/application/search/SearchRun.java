@@ -6,6 +6,7 @@ import com.felarmouche.octo.core.domain.Fingerprint;
 import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.domain.Verdict;
+import com.felarmouche.octo.core.exclusion.ExclusionFilter;
 import com.felarmouche.octo.core.plugin.Finder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -17,8 +18,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Runs a Search through its fixed steps: Find, Deduplicate, Filter by type, Evaluate, Record, Notify.
- * (Exclude joins between Deduplicate and Filter by type in a later ticket.)
+ * Runs a Search through its fixed steps: Find, Deduplicate, Exclude, Filter by type, Evaluate, Record, Notify.
  * A failing Finder or Notifier is recorded in the run status and the rest of the run continues.
  */
 @Slf4j
@@ -39,8 +39,10 @@ public class SearchRun {
 
         List<Listing> found = find(search, failures);
         List<Listing> fresh = deduplicate(search.id(), found);
+        ExclusionFilter exclusion = search.exclusionFilter();
         List<JudgedListing> judged = fresh.stream()
-                .map(listing -> new JudgedListing(listing, filterByType(search, listing)
+                .map(listing -> new JudgedListing(listing, exclude(exclusion, listing)
+                        .or(() -> filterByType(search, listing))
                         .orElseGet(() -> evaluate(search, listing))))
                 .toList();
         record(search.id(), judged);
@@ -76,6 +78,11 @@ public class SearchRun {
             if (!memory.hasSeen(searchId, fingerprint)) fresh.putIfAbsent(fingerprint, listing);
         }
         return List.copyOf(fresh.values());
+    }
+
+    /** 3. Exclude: the Exclusion Filter's rejection as NO_BUY, empty when the Listing passes. */
+    private static Optional<Verdict> exclude(ExclusionFilter exclusion, Listing listing) {
+        return exclusion.reject(listing).map(reason -> new Verdict(Decision.NO_BUY, reason));
     }
 
     /** 4. Filter by type: the Listing Type Filter's rejection as NO_BUY, empty when the Listing passes. */
