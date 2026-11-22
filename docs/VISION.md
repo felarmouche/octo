@@ -10,6 +10,8 @@ Octo watches second-hand marketplaces for underpriced offers. The user defines *
 
 Octo is a single-user tool. There are no accounts, roles or tenants.
 
+The frontend is served from the same origin as the API and logs in against the backend with the one operator user. That is a lock on the door, not an account: there is still exactly one user, and nothing belongs to anyone (see [ADR-0002](adr/0002-own-session-login-instead-of-identity-provider.md)).
+
 ## Philosophy
 
 1. **Simple over clever.** This is the top rule. When in doubt, pick the solution with fewer concepts, fewer classes and fewer settings. Don't build for hypothetical future needs.

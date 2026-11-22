@@ -6,7 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -14,8 +15,6 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -127,7 +126,8 @@ class DiscoveryApiTest {
     }
 
     private MvcTestResult get(String uri) {
-        String basic = Base64.getEncoder().encodeToString("octo:secret".getBytes(StandardCharsets.UTF_8));
-        return mvc.get().uri(uri).header(HttpHeaders.AUTHORIZATION, "Basic " + basic).exchange();
+        MockHttpSession session = (MockHttpSession) mvc.post().uri("/api/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"octo\",\"password\":\"secret\"}").exchange().getRequest().getSession(false);
+        return mvc.get().uri(uri).session(session).exchange();
     }
 }

@@ -23,10 +23,10 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
@@ -36,7 +36,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,6 +72,7 @@ class SearchApiTest {
     private FakeFinder finder;
     @Autowired
     private RecordingNotifier notifier;
+    private MockHttpSession session;
 
     @BeforeEach
     void setUp() {
@@ -80,6 +80,7 @@ class SearchApiTest {
         finder.reset();
         notifier.sent.clear();
         clock.set(MONDAY_NOON);
+        session = login();
     }
 
     @Test
@@ -97,15 +98,6 @@ class SearchApiTest {
                 .hasPathSatisfying("$.typeFilter.price.maxInCents", v -> v.assertThat().isEqualTo(250_00));
         assertThat(get("/api/searches")).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$[*].id", v -> v.assertThat().asList().containsExactly(id));
-    }
-
-    @Test
-    void theApiNeedsTheConfiguredUser() {
-        assertThat(mvc.get().uri("/api/searches")).hasStatus(HttpStatus.UNAUTHORIZED);
-        assertThat(mvc.get().uri("/api/searches").header(HttpHeaders.AUTHORIZATION, basic(USER, "wrong")))
-                .hasStatus(HttpStatus.UNAUTHORIZED);
-        assertThat(mvc.post().uri("/api/searches").contentType(MediaType.APPLICATION_JSON).content(ps5Search()))
-                .hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -484,22 +476,29 @@ class SearchApiTest {
         return decisions.isBlank() ? "" : "\"" + String.join("\",\"", decisions.split(",")) + "\"";
     }
 
+    /** Logs in like the frontend does and returns the session. */
+    private MockHttpSession login() {
+        return (MockHttpSession) mvc.post().uri("/api/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"%s\",\"password\":\"%s\"}".formatted(USER, PASSWORD))
+                .exchange().getRequest().getSession(false);
+    }
+
     private MvcTestResult get(String uri) {
-        return mvc.get().uri(uri).header(HttpHeaders.AUTHORIZATION, basic(USER, PASSWORD)).exchange();
+        return mvc.get().uri(uri).session(session).exchange();
     }
 
     private MvcTestResult post(String uri, String body) {
-        return mvc.post().uri(uri).header(HttpHeaders.AUTHORIZATION, basic(USER, PASSWORD))
+        return mvc.post().uri(uri).session(session)
                 .contentType(MediaType.APPLICATION_JSON).content(body).exchange();
     }
 
     private MvcTestResult put(String uri, String body) {
-        return mvc.put().uri(uri).header(HttpHeaders.AUTHORIZATION, basic(USER, PASSWORD))
+        return mvc.put().uri(uri).session(session)
                 .contentType(MediaType.APPLICATION_JSON).content(body).exchange();
     }
 
     private MvcTestResult delete(String uri) {
-        return mvc.delete().uri(uri).header(HttpHeaders.AUTHORIZATION, basic(USER, PASSWORD)).exchange();
+        return mvc.delete().uri(uri).session(session).exchange();
     }
 
     private static String id(MvcTestResult result) {
@@ -507,9 +506,6 @@ class SearchApiTest {
         return tools.jackson.databind.json.JsonMapper.shared().readTree(body).get("id").asString();
     }
 
-    private static String basic(String user, String password) {
-        return "Basic " + Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
-    }
 
     private static Listing listing(String title, int price) {
         return new Listing("fake", title, title, "", "https://example.org/" + title.hashCode(), List.of(),
