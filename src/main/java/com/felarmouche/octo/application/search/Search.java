@@ -25,7 +25,7 @@ public record Search(
         String id,
         String name,
         TypeSlot<?> type,
-        ExclusionFilterSettings exclusion,
+        ExclusionFilterSettings exclusionSettings,
         List<FinderSlot<?>> finders,
         Optional<EvaluatorSlot<?>> evaluator,
         List<NotifierSlot<?>> notifiers) {
@@ -34,8 +34,8 @@ public record Search(
     public Search {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(type, "type");
-        exclusion = exclusion == null ? ExclusionFilterSettings.NONE : exclusion;
-        exclusionFilter(type, exclusion);
+        exclusionSettings = exclusionSettings == null ? ExclusionFilterSettings.NONE : exclusionSettings;
+        validatePresets(type, exclusionSettings);
         finders = List.copyOf(finders);
         evaluator = evaluator == null ? Optional.empty() : evaluator;
         notifiers = List.copyOf(notifiers);
@@ -43,11 +43,16 @@ public record Search(
 
     /** The Exclusion Filter of this Search, built once per run. */
     ExclusionFilter exclusionFilter() {
-        return exclusionFilter(type, exclusion);
+        return exclusionFilter(type, exclusionSettings);
     }
 
-    private static ExclusionFilter exclusionFilter(TypeSlot<?> type, ExclusionFilterSettings exclusion) {
-        return ExclusionFilter.of(exclusion, type.listingType().availableExclusionPresets());
+    /** Building the filter throws when a selected preset is not offered for the Listing Type. */
+    private static void validatePresets(TypeSlot<?> type, ExclusionFilterSettings settings) {
+        exclusionFilter(type, settings);
+    }
+
+    private static ExclusionFilter exclusionFilter(TypeSlot<?> type, ExclusionFilterSettings settings) {
+        return ExclusionFilter.of(settings, type.listingType().availableExclusionPresets());
     }
 
     /** The Search's Listing Type and the settings of its Listing Type Filter. */

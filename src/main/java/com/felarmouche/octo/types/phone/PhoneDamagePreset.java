@@ -5,7 +5,7 @@ import com.felarmouche.octo.core.exclusion.ExclusionRule;
 
 import java.util.List;
 
-/** The phone Exclusion Preset "damage": typical damage words in phone ads. */
+/** The phone Exclusion Preset "damage": typical damage words in phone Listings. */
 final class PhoneDamagePreset {
 
     private PhoneDamagePreset() {

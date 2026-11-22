@@ -15,7 +15,7 @@ public record ExclusionPreset(String id, String name, List<ExclusionRule> rules)
         rules = List.copyOf(rules);
     }
 
-    /** Wanted and swap ads. Title only, since descriptions often say "tausche nicht". */
+    /** Wanted and swap Listings. Title only, since descriptions often say "tausche nicht". */
     public static final ExclusionPreset WANTED_SWAP = new ExclusionPreset("wanted-swap", "Gesuche / Tausch", List.of(
             ExclusionRule.of("Gesuch / Tausch", true, "suche|gesucht|kaufe|ankauf|tausche|nur[\\s\\-]*tausch")));
 

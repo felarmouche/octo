@@ -24,3 +24,4 @@ Implemented. The Exclusion Filter lives in `core.exclusion` (`ExclusionFilter`, 
 Notes:
 - The in-code PS5 Search now selects `wanted-swap`.
 - `DamageTextFilter` stays in place for the old path and is removed in 07. Until then the matcher exists twice.
+- Rule order is fixed: the selected presets in the order the Listing Type offers them (common first), then the user's own words, as in the old `DamageTextFilter`. When several rules match, the reason is always the same.

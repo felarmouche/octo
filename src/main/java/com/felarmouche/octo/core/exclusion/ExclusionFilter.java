@@ -4,9 +4,8 @@ import com.felarmouche.octo.core.domain.Listing;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -38,20 +37,19 @@ public final class ExclusionFilter {
     }
 
     /**
-     * The filter from the settings, with the selected presets looked up among the available ones.
+     * The filter from the settings: the rules of the selected presets in the order they are offered,
+     * then the user's own words. So when several rules match, the reason is always the same.
      *
      * @throws IllegalArgumentException when a selected preset is not available
      */
     public static ExclusionFilter of(ExclusionFilterSettings settings, List<ExclusionPreset> available) {
-        Map<String, ExclusionPreset> byId = available.stream()
-                .collect(Collectors.toMap(ExclusionPreset::id, Function.identity()));
-        List<ExclusionRule> rules = new ArrayList<>();
-        settings.words().stream().map(ExclusionRule::word).forEach(rules::add);
+        Set<String> offered = available.stream().map(ExclusionPreset::id).collect(Collectors.toSet());
         for (String id : settings.presets()) {
-            ExclusionPreset preset = byId.get(id);
-            if (preset == null) throw new IllegalArgumentException("Exclusion Preset not available: " + id);
-            rules.addAll(preset.rules());
+            if (!offered.contains(id)) throw new IllegalArgumentException("Exclusion Preset not available: " + id);
         }
+        List<ExclusionRule> rules = new ArrayList<>();
+        available.stream().filter(p -> settings.presets().contains(p.id())).forEach(p -> rules.addAll(p.rules()));
+        settings.words().stream().map(ExclusionRule::word).forEach(rules::add);
         return new ExclusionFilter(rules);
     }
 
