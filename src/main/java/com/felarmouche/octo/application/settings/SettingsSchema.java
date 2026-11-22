@@ -21,8 +21,12 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
+import java.time.DayOfWeek;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -33,13 +37,18 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>labels ({@code title}) and initial values ({@code default}) from {@code @Schema(title, defaultValue)},</li>
  *   <li>the input a frontend shows ({@code format}) from {@code @Schema(format)}, e.g. {@code money-cents}
  *       for an integer amount in cents that a frontend edits in euros,</li>
- *   <li>enum value labels ({@code oneOf} of {@code const} and {@code title}) from the enum's {@code label()} method.</li>
+ *   <li>enum value labels ({@code oneOf} of {@code const} and {@code title}) from the enum's {@code label()} method,
+ *       and German short names for weekdays ({@code Mo} to {@code So}),</li>
+ *   <li>{@code uniqueItems} for a {@link Set}, so a frontend offers each value once.</li>
  * </ul>
  */
 @Component
 public class SettingsSchema {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final Map<DayOfWeek, String> WEEKDAYS = new EnumMap<>(Map.of(
+            DayOfWeek.MONDAY, "Mo", DayOfWeek.TUESDAY, "Di", DayOfWeek.WEDNESDAY, "Mi", DayOfWeek.THURSDAY, "Do",
+            DayOfWeek.FRIDAY, "Fr", DayOfWeek.SATURDAY, "Sa", DayOfWeek.SUNDAY, "So"));
 
     private final SchemaGenerator generator;
     private final Map<Class<?>, JsonNode> cache = new ConcurrentHashMap<>();
@@ -51,13 +60,16 @@ public class SettingsSchema {
         config.forFields()
                 .withDefaultResolver(SettingsSchema::typedDefault)
                 .withRequiredCheck(field -> field.getType().getErasedType().isPrimitive())
+                .withArrayUniqueItemsResolver(field -> Set.class.isAssignableFrom(field.getType().getErasedType()) ? true : null)
                 .withInstanceAttributeOverride((attributes, field, context) -> {
                     Schema schema = field.getAnnotationConsideringFieldAndGetter(Schema.class);
                     if (schema != null && !schema.format().isEmpty()) attributes.put("format", schema.format());
                 });
         config.forTypesInGeneral().withCustomDefinitionProvider((type, context) -> {
             Class<?> erased = type.getErasedType();
-            return erased.isEnum() ? labelledEnum(erased, context.getGeneratorConfig().createObjectNode()) : null;
+            ObjectNode definition = context.getGeneratorConfig().createObjectNode();
+            if (erased == DayOfWeek.class) return labelled(definition, WEEKDAYS);
+            return erased.isEnum() ? labelledEnum(erased, definition) : null;
         });
         config.with(new JacksonSchemaModule())
                 .with(new JakartaValidationModule(JakartaValidationOption.NOT_NULLABLE_FIELD_IS_REQUIRED,
@@ -96,15 +108,22 @@ public class SettingsSchema {
         } catch (NoSuchMethodException e) {
             return null;
         }
-        definition.put("type", "string");
-        ArrayNode values = definition.putArray("oneOf");
+        Map<Enum<?>, String> labels = new LinkedHashMap<>();
         for (Object constant : enumType.getEnumConstants()) {
             try {
-                values.addObject().put("const", ((Enum<?>) constant).name()).put("title", (String) label.invoke(constant));
+                labels.put((Enum<?>) constant, (String) label.invoke(constant));
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException("label() of " + constant, e);
             }
         }
+        return labelled(definition, labels);
+    }
+
+    /** In the order of the map. */
+    private static CustomDefinition labelled(ObjectNode definition, Map<? extends Enum<?>, String> labels) {
+        definition.put("type", "string");
+        ArrayNode values = definition.putArray("oneOf");
+        labels.forEach((constant, title) -> values.addObject().put("const", constant.name()).put("title", title));
         return new CustomDefinition(definition);
     }
 }

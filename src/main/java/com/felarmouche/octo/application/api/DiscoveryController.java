@@ -3,6 +3,9 @@ package com.felarmouche.octo.application.api;
 import com.felarmouche.octo.application.plugin.ListingTypes;
 import com.felarmouche.octo.application.plugin.PluginKind;
 import com.felarmouche.octo.application.plugin.PluginRegistry;
+import com.felarmouche.octo.application.search.Retention;
+import com.felarmouche.octo.application.search.Schedule;
+import com.felarmouche.octo.application.search.SearchDefinition;
 import com.felarmouche.octo.application.settings.SettingsSchema;
 import com.felarmouche.octo.core.exclusion.ExclusionFilterSettings;
 import com.felarmouche.octo.core.exclusion.ExclusionPreset;
@@ -18,7 +21,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 
-/** What a frontend needs to render the forms of a Search: Listing Types and Plugins with their settings schemas. */
+/**
+ * What a frontend needs to render the forms of a Search: Listing Types and Plugins with their settings schemas,
+ * and the schemas of the fixed parts every Search has.
+ */
 @RestController
 @RequestMapping("/api")
 class DiscoveryController {
@@ -85,5 +91,19 @@ class DiscoveryController {
     private PluginResponse response(Plugin<?> plugin) {
         return new PluginResponse(plugin.id(), plugin.title(), PluginKind.of(plugin), plugin.listingTypes().stream().sorted().toList(),
                 schema.of(plugin.settingsType()));
+    }
+
+    /**
+     * The schemas of the parts of a Search that no Plugin or Listing Type brings.
+     *
+     * @param notifierDecisions the Decisions one Notifier reports
+     */
+    record SearchSchemaResponse(JsonNode schedule, JsonNode retention, JsonNode notifierDecisions) {
+    }
+
+    @GetMapping("/search-schema")
+    SearchSchemaResponse searchSchema() {
+        JsonNode notifierDecisions = schema.of(SearchDefinition.NotifierSlot.class).get("properties").get("decisions");
+        return new SearchSchemaResponse(schema.of(Schedule.class), schema.of(Retention.class), notifierDecisions);
     }
 }

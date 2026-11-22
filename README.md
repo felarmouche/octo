@@ -18,17 +18,20 @@ Everything except `POST /api/login` needs a session. `POST /api/login` with `{"u
 | `GET /api/session` | `200` while logged in, `401` otherwise |
 | `GET /api/listing-types` | Listing Types with their German title, the schemas of their Listing Type Filter and of the Exclusion Filter (offering exactly their Exclusion Presets), and those presets |
 | `GET /api/plugins?listingType=phone` | the Plugins a Search of that Listing Type can use, with German title, kind and settings schema; without `listingType` all Plugins |
+| `GET /api/search-schema` | the schemas of the parts every Search has: `schedule`, `retention` and `notifierDecisions` (the Decisions a Notifier reports) |
+| `GET /api/searches/template?listingType=phone` | a new Search's definition: empty name, filters and Plugins, default Schedule and retention; add a name, a Finder and a Notifier and `POST` it |
 | `GET`, `POST /api/searches` | list and create Searches |
 | `GET`, `PUT`, `DELETE /api/searches/{id}` | read, edit, delete a Search |
 | `POST /api/searches/{id}/pause`, `/resume` | pause and resume |
 | `GET /api/searches/{id}/history` | the Listing History, newest first, each Listing with its Verdict |
 
-Invalid input gives `400` with `{"errors": [{"field": "finders[0].settings.maxListings", "message": "..."}]}`.
+Invalid input gives `400` with `{"errors": [{"field": "finders[0].settings.maxListings", "message": "..."}]}`; `field` is left out when the error belongs to no field of a Search, e.g. an unknown Listing Type for the template.
 
 The settings schemas are JSON Schema (draft 2020-12), generated from the settings records. A frontend renders its forms from them and knows no Plugin:
 - `type`, `required`, and constraints like `minimum` or `minLength`,
 - `title` as the field label, `default` as the initial value,
-- enum values as `oneOf` of `const` (what to send) and `title` (what to show).
+- enum values as `oneOf` of `const` (what to send) and `title` (what to show), sets as arrays with `uniqueItems`,
+- `format` for the input to show: `money-cents` (an amount in cents, edited in euros) and `time` (`HH:mm`, the Schedule window; not the RFC 3339 full time a standard format checker expects).
 
 ## Adding a Plugin
 

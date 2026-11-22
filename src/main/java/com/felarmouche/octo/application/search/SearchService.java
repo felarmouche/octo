@@ -50,6 +50,24 @@ public class SearchService {
         this.clock = clock;
     }
 
+    /**
+     * The definition a new Search of this Listing Type starts from: no name, empty filters, no Plugins,
+     * and the default Schedule and retention rule. With a name, a Finder and a Notifier it can be created.
+     *
+     * @throws InvalidSettingsException without a field when there is no Listing Type with this id
+     */
+    public SearchDefinition template(String listingType) {
+        ListingType<?> type = listingTypes.find(listingType)
+                .orElseThrow(() -> new InvalidSettingsException(null, "unknown Listing Type: " + listingType));
+        return new SearchDefinition("", type.id(),
+                // the filter as a saved Search stores it when none of its fields is set
+                codec.encode(codec.decode(null, type.filterSettingsType(), "typeFilter")),
+                codec.encode(ExclusionFilterSettings.NONE),
+                List.of(), null, List.of(),
+                codec.encode(Schedule.DEFAULT),
+                codec.encode(Retention.DEFAULT));
+    }
+
     /** A new Search is active and due at once, if it is inside its Schedule. */
     public StoredSearch create(SearchDefinition definition) {
         String id = UUID.randomUUID().toString();

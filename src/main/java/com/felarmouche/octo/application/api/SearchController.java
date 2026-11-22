@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -56,6 +57,12 @@ class SearchController {
     @GetMapping
     List<SearchResponse> list() {
         return searches.list().stream().map(this::response).toList();
+    }
+
+    /** What a new Search of this Listing Type starts from, to be edited and then POSTed. */
+    @GetMapping("/template")
+    SearchDefinition template(@RequestParam String listingType) {
+        return searches.template(listingType);
     }
 
     @GetMapping("/{id}")

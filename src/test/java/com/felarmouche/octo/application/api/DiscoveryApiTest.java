@@ -168,6 +168,68 @@ class DiscoveryApiTest {
                 .containsExactly("referenceProductUrl", "minMarginInCents", "minAiConfidence", "maxPhotos");
     }
 
+    @Test
+    void theSearchSchemaDescribesTheScheduleWithTimesAndLabelledWeekdays() {
+        String schedule = "$.schedule.properties";
+        assertThat(get("/api/search-schema")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.schedule.required", v -> v.assertThat().asList().containsExactly("intervalMinutes"))
+                .hasPathSatisfying(schedule + ".intervalMinutes.type", v -> v.assertThat().isEqualTo("integer"))
+                .hasPathSatisfying(schedule + ".intervalMinutes.minimum", v -> v.assertThat().isEqualTo(1))
+                .hasPathSatisfying(schedule + ".intervalMinutes.title", v -> v.assertThat().isEqualTo("Intervall (Minuten)"))
+                .hasPathSatisfying(schedule + ".window.title", v -> v.assertThat().isEqualTo("Zeitfenster"))
+                .hasPathSatisfying(schedule + ".window.properties.from.type", v -> v.assertThat().isEqualTo("string"))
+                .hasPathSatisfying(schedule + ".window.properties.from.format", v -> v.assertThat().isEqualTo("time"))
+                .hasPathSatisfying(schedule + ".window.properties.from.title", v -> v.assertThat().isEqualTo("Von"))
+                .hasPathSatisfying(schedule + ".window.properties.to.format", v -> v.assertThat().isEqualTo("time"))
+                .hasPathSatisfying(schedule + ".window.properties.to.title", v -> v.assertThat().isEqualTo("Bis"))
+                .hasPathSatisfying(schedule + ".weekdays.title", v -> v.assertThat().isEqualTo("Wochentage"))
+                .hasPathSatisfying(schedule + ".weekdays.description", v -> v.assertThat().isEqualTo("Keine Auswahl: jeden Tag"))
+                .hasPathSatisfying(schedule + ".weekdays.uniqueItems", v -> v.assertThat().isEqualTo(true))
+                .hasPathSatisfying(schedule + ".weekdays.items.oneOf[*].const", v -> v.assertThat().asList().containsExactly(
+                        "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"))
+                .hasPathSatisfying(schedule + ".weekdays.items.oneOf[*].title", v -> v.assertThat().asList()
+                        .containsExactly("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"));
+    }
+
+    @Test
+    void aScheduleWindowIsOptionalButNeedsBothTimes() {
+        assertThat(get("/api/search-schema")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.schedule.properties.window.type", v -> v.assertThat().asList()
+                        .containsExactlyInAnyOrder("object", "null"))
+                .hasPathSatisfying("$.schedule.properties.window.required", v -> v.assertThat().asList()
+                        .containsExactlyInAnyOrder("from", "to"));
+    }
+
+    @Test
+    void theSearchSchemaDescribesTheRetentionRule() {
+        String retention = "$.retention.properties";
+        assertThat(get("/api/search-schema")).hasStatusOk().bodyJson()
+                .doesNotHavePath("$.retention.required")
+                .hasPathSatisfying(retention + ".newest.type", v -> v.assertThat().asList()
+                        .containsExactlyInAnyOrder("integer", "null"))
+                .hasPathSatisfying(retention + ".newest.minimum", v -> v.assertThat().isEqualTo(1))
+                .hasPathSatisfying(retention + ".newest.title", v -> v.assertThat().isEqualTo("Neueste behalten"))
+                .hasPathSatisfying(retention + ".decisions.title", v -> v.assertThat().isEqualTo("Entscheidungen behalten"))
+                .hasPathSatisfying(retention + ".decisions.uniqueItems", v -> v.assertThat().isEqualTo(true))
+                .hasPathSatisfying(retention + ".decisions.description", v -> v.assertThat().isEqualTo("Keine Auswahl: alle Entscheidungen"))
+                .hasPathSatisfying(retention + ".decisions.items.oneOf[*].title", v -> v.assertThat().asList()
+                        .containsExactly("Kaufen", "Unsicher", "Nicht kaufen", "Nicht bewertbar"));
+    }
+
+    @Test
+    void theSearchSchemaDescribesTheDecisionsANotifierReports() {
+        assertThat(get("/api/search-schema")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.notifierDecisions.type", v -> v.assertThat().isEqualTo("array"))
+                .hasPathSatisfying("$.notifierDecisions.title", v -> v.assertThat().isEqualTo("Meldet"))
+                .hasPathSatisfying("$.notifierDecisions.uniqueItems", v -> v.assertThat().isEqualTo(true))
+                .hasPathSatisfying("$.notifierDecisions.minItems", v -> v.assertThat().isEqualTo(1))
+                .hasPathSatisfying("$.notifierDecisions.items.oneOf", v -> v.assertThat().asList().containsExactly(
+                        Map.of("const", "BUY", "title", "Kaufen"),
+                        Map.of("const", "UNSURE", "title", "Unsicher"),
+                        Map.of("const", "NO_BUY", "title", "Nicht kaufen"),
+                        Map.of("const", "NOT_EVALUATABLE", "title", "Nicht bewertbar")));
+    }
+
     private MvcTestResult get(String uri) {
         MockHttpSession session = (MockHttpSession) mvc.post().uri("/api/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"octo\",\"password\":\"secret\"}").exchange().getRequest().getSession(false);

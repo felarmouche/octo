@@ -29,6 +29,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -253,6 +256,52 @@ class SearchApiTest {
         assertThat(delete("/api/searches/nope")).hasStatus(HttpStatus.NOT_FOUND);
     }
 
+    // --- Template ------------------------------------------------------------------------------
+
+    @Test
+    void theTemplateIsAnEmptySearchWithADefaultScheduleAndRetention() {
+        List<String> types = json(get("/api/listing-types")).valueStream().map(t -> t.get("id").asString()).toList();
+        assertThat(types).isNotEmpty();
+        for (String type : types) {
+            assertThat(get("/api/searches/template?listingType=" + type)).hasStatusOk().bodyJson()
+                    .hasPathSatisfying("$.name", v -> v.assertThat().isEqualTo(""))
+                    .hasPathSatisfying("$.listingType", v -> v.assertThat().isEqualTo(type))
+                    .hasPathSatisfying("$.typeFilter", v -> v.assertThat().isInstanceOf(Map.class))
+                    .hasPathSatisfying("$.exclusion.words", v -> v.assertThat().asList().isEmpty())
+                    .hasPathSatisfying("$.exclusion.presets", v -> v.assertThat().asList().isEmpty())
+                    .hasPathSatisfying("$.finders", v -> v.assertThat().asList().isEmpty())
+                    .hasPathSatisfying("$.evaluator", v -> v.assertThat().isNull())
+                    .hasPathSatisfying("$.notifiers", v -> v.assertThat().asList().isEmpty())
+                    .hasPathSatisfying("$.schedule.intervalMinutes", v -> v.assertThat().isEqualTo(15))
+                    .hasPathSatisfying("$.schedule.window", v -> v.assertThat().isNull())
+                    .hasPathSatisfying("$.schedule.weekdays", v -> v.assertThat().asList().isEmpty())
+                    .hasPathSatisfying("$.retention.newest", v -> v.assertThat().isEqualTo(500))
+                    .hasPathSatisfying("$.retention.decisions", v -> v.assertThat().asList().isEmpty());
+        }
+        assertThat(get("/api/searches")).bodyJson().hasPathSatisfying("$", v -> v.assertThat().asList().isEmpty());
+    }
+
+    @Test
+    void aTemplateWithANameAFinderAndANotifierSavesAsASearch() {
+        ObjectNode template = (ObjectNode) json(get("/api/searches/template?listingType=generic"));
+        template.put("name", "PS5");
+        template.withArray("finders").addObject().put("plugin", "fake-finder").putObject("settings").put("query", "ps5");
+        ObjectNode notifier = template.withArray("notifiers").addObject().put("plugin", "recording-notifier");
+        notifier.putArray("decisions").add("BUY");
+        notifier.putObject("settings").put("channel", "me");
+
+        assertThat(post("/api/searches", template.toString())).hasStatus(HttpStatus.CREATED).bodyJson()
+                .hasPathSatisfying("$.schedule.intervalMinutes", v -> v.assertThat().isEqualTo(15))
+                .hasPathSatisfying("$.retention.newest", v -> v.assertThat().isEqualTo(500));
+    }
+
+    @Test
+    void theTemplateOfAnUnknownListingTypeIsRefusedWithoutAField() {
+        assertThat(get("/api/searches/template?listingType=car")).hasStatus(HttpStatus.BAD_REQUEST).bodyJson()
+                .doesNotHavePath("$.errors[0].field")
+                .hasPathSatisfying("$.errors[0].message", v -> v.assertThat().asString().contains("car"));
+    }
+
     // --- Schedule ------------------------------------------------------------------------------
 
     @Test
@@ -264,8 +313,8 @@ class SearchApiTest {
 
         assertThat(get("/api/searches/" + id)).hasStatusOk().bodyJson()
                 .hasPathSatisfying("$.schedule.intervalMinutes", v -> v.assertThat().isEqualTo(10))
-                .hasPathSatisfying("$.schedule.window.from", v -> v.assertThat().isEqualTo("11:00:00"))
-                .hasPathSatisfying("$.schedule.window.to", v -> v.assertThat().isEqualTo("17:00:00"))
+                .hasPathSatisfying("$.schedule.window.from", v -> v.assertThat().isEqualTo("11:00"))
+                .hasPathSatisfying("$.schedule.window.to", v -> v.assertThat().isEqualTo("17:00"))
                 .hasPathSatisfying("$.schedule.weekdays", v -> v.assertThat().asList()
                         .containsExactlyInAnyOrder("MONDAY", "FRIDAY"));
     }
@@ -280,6 +329,11 @@ class SearchApiTest {
                 "\"intervalMinutes\": 5, \"window\": {\"from\": \"17:00\", \"to\": \"11:00\"}")), "schedule.window");
         assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5",
                 "\"intervalMinutes\": 5, \"weekdays\": [\"MONTAG\"]")), "schedule.weekdays[0]");
+        // window times are HH:mm, as the search-schema describes them
+        assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"window\": {\"from\": \"8:00\", \"to\": \"11:00\"}")), "schedule.window.from");
+        assertRefused(post("/api/searches", ps5Search().replace("\"intervalMinutes\": 5",
+                "\"intervalMinutes\": 5, \"window\": {\"from\": \"08:00\", \"to\": \"11:00:30\"}")), "schedule.window.to");
     }
 
     @Test
@@ -501,9 +555,12 @@ class SearchApiTest {
         return mvc.delete().uri(uri).session(session).exchange();
     }
 
+    private static JsonNode json(MvcTestResult result) {
+        return JsonMapper.shared().readTree(new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8));
+    }
+
     private static String id(MvcTestResult result) {
-        String body = new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
-        return tools.jackson.databind.json.JsonMapper.shared().readTree(body).get("id").asString();
+        return json(result).get("id").asString();
     }
 
     private static Listing listing(String title, int price) {

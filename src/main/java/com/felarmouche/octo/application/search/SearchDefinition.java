@@ -2,6 +2,8 @@ package com.felarmouche.octo.application.search;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.felarmouche.octo.core.domain.Decision;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Size;
 import tools.jackson.databind.JsonNode;
 
 import java.util.List;
@@ -37,8 +39,15 @@ public record SearchDefinition(
     public record Slot(String plugin, JsonNode settings) {
     }
 
-    /** A Notifier, the Decisions it reports, and its settings. */
-    public record NotifierSlot(String plugin, Set<Decision> decisions, JsonNode settings) {
+    /**
+     * A Notifier, the Decisions it reports, and its settings.
+     *
+     * @param decisions at least one; its schema is served as the search-schema's {@code notifierDecisions}
+     */
+    public record NotifierSlot(
+            String plugin,
+            @Size(min = 1) @Schema(title = "Meldet") Set<Decision> decisions,
+            JsonNode settings) {
         public NotifierSlot {
             decisions = decisions == null ? Set.of() : Set.copyOf(decisions);
         }
