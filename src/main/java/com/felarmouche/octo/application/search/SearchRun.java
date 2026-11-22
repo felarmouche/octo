@@ -14,10 +14,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * Runs a Search through its fixed steps: Find, Deduplicate, Evaluate, Record, Notify.
- * (Exclude and Filter by type join between Deduplicate and Evaluate in later tickets.)
+ * Runs a Search through its fixed steps: Find, Deduplicate, Filter by type, Evaluate, Record, Notify.
+ * (Exclude joins between Deduplicate and Filter by type in a later ticket.)
  * A failing Finder or Notifier is recorded in the run status and the rest of the run continues.
  */
 @Slf4j
@@ -39,7 +40,8 @@ public class SearchRun {
         List<Listing> found = find(search, failures);
         List<Listing> fresh = deduplicate(search.id(), found);
         List<JudgedListing> judged = fresh.stream()
-                .map(listing -> new JudgedListing(listing, evaluate(search, listing)))
+                .map(listing -> new JudgedListing(listing, filterByType(search, listing)
+                        .orElseGet(() -> evaluate(search, listing))))
                 .toList();
         record(search.id(), judged);
         notify(search, judged, failures);
@@ -55,8 +57,8 @@ public class SearchRun {
         List<Listing> found = new ArrayList<>();
         for (Search.FinderSlot<?> slot : search.finders()) {
             try {
-                Finder.Result result = slot.find(search.listingType());
-                result.listings().stream().map(search.listingType()::complete).forEach(found::add);
+                Finder.Result result = slot.find(search.type().listingType());
+                result.listings().stream().map(search.type()::complete).forEach(found::add);
                 result.problems().forEach(problem -> failures.add("Finder " + slot.pluginId() + ": " + problem));
             } catch (RuntimeException e) {
                 log.warn("Finder {} failed", slot.pluginId(), e);
@@ -74,6 +76,11 @@ public class SearchRun {
             if (!memory.hasSeen(searchId, fingerprint)) fresh.putIfAbsent(fingerprint, listing);
         }
         return List.copyOf(fresh.values());
+    }
+
+    /** 4. Filter by type: the Listing Type Filter's rejection as NO_BUY, empty when the Listing passes. */
+    private static Optional<Verdict> filterByType(Search search, Listing listing) {
+        return search.type().reject(listing).map(reason -> new Verdict(Decision.NO_BUY, reason));
     }
 
     /** 5. Evaluate: the Evaluator's Verdict, NOT_EVALUATABLE on failure, BUY without an Evaluator. */
@@ -114,7 +121,7 @@ public class SearchRun {
     }
 
     private static Alert alert(Search search, JudgedListing judged) {
-        List<LabelledValue> values = new ArrayList<>(search.listingType().describe(judged.listing()));
+        List<LabelledValue> values = new ArrayList<>(search.type().describe(judged.listing()));
         values.addAll(judged.verdict().details());
         return new Alert(judged.listing(), judged.verdict(), values);
     }

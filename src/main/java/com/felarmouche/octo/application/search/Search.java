@@ -2,6 +2,7 @@ package com.felarmouche.octo.application.search;
 
 import com.felarmouche.octo.core.domain.Alert;
 import com.felarmouche.octo.core.domain.Decision;
+import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.domain.Verdict;
 import com.felarmouche.octo.core.listingtype.ListingType;
@@ -21,21 +22,41 @@ import java.util.Set;
 public record Search(
         String id,
         String name,
-        ListingType listingType,
+        TypeSlot<?> type,
         List<FinderSlot<?>> finders,
         Optional<EvaluatorSlot<?>> evaluator,
         List<NotifierSlot<?>> notifiers) {
 
     public Search {
         Objects.requireNonNull(id, "id");
-        Objects.requireNonNull(listingType, "listingType");
+        Objects.requireNonNull(type, "type");
         finders = List.copyOf(finders);
         evaluator = evaluator == null ? Optional.empty() : evaluator;
         notifiers = List.copyOf(notifiers);
     }
 
+    /** The Search's Listing Type and the settings of its Listing Type Filter. */
+    public record TypeSlot<F extends Record>(ListingType<F> listingType, F filter) {
+        public TypeSlot {
+            Objects.requireNonNull(listingType, "listingType");
+            Objects.requireNonNull(filter, "filter");
+        }
+
+        Listing complete(Listing listing) {
+            return listingType.complete(listing);
+        }
+
+        Optional<String> reject(Listing listing) {
+            return listingType.reject(listing, filter);
+        }
+
+        List<LabelledValue> describe(Listing listing) {
+            return listingType.describe(listing);
+        }
+    }
+
     public record FinderSlot<S extends Record>(Finder<S> finder, S settings) {
-        Finder.Result find(ListingType listingType) {
+        Finder.Result find(ListingType<?> listingType) {
             return finder.find(settings, listingType);
         }
 

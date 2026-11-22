@@ -8,10 +8,18 @@ import com.felarmouche.octo.core.domain.LabelledValue;
 import com.felarmouche.octo.core.domain.Listing;
 import com.felarmouche.octo.core.domain.Verdict;
 import com.felarmouche.octo.core.listingtype.ListingType;
+import com.felarmouche.octo.core.listingtype.PriceRange;
 import com.felarmouche.octo.core.plugin.Evaluator;
 import com.felarmouche.octo.core.plugin.Finder;
 import com.felarmouche.octo.core.plugin.Notifier;
 import com.felarmouche.octo.core.plugin.PluginException;
+import com.felarmouche.octo.types.phone.Battery;
+import com.felarmouche.octo.types.phone.PhoneAttributes;
+import com.felarmouche.octo.types.phone.PhoneCondition;
+import com.felarmouche.octo.types.phone.PhoneFilterSettings;
+import com.felarmouche.octo.types.phone.PhoneListingType;
+import com.felarmouche.octo.types.phone.Storage;
+import com.felarmouche.octo.types.generic.GenericFilterSettings;
 import com.felarmouche.octo.types.generic.GenericListingType;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +35,7 @@ import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.InstanceOfAssertFactories.LIST;
 
 class SearchRunTest {
 
@@ -219,7 +228,109 @@ class SearchRunTest {
                 .contains("recording-notifier").contains("Telegram antwortet 502");
     }
 
+    @Test
+    void genericPriceRangeRejectsKnownPricesOutsideItAndLetsListingsWithoutPricePass() {
+        var finder = new FakeFinder("ps5", List.of(
+                listing("Zu billig", 50_00), listing("Passt", 200_00), listing("Zu teuer", 300_00), listing("VB", null)));
+        var notifier = new RecordingNotifier();
+        Search search = new Search("search-1", "PS5",
+                new Search.TypeSlot<>(new GenericListingType(),
+                        new GenericFilterSettings(new PriceRange(100_00, 250_00))),
+                List.of(slot(finder)), Optional.empty(), List.of(slot(notifier, Decision.BUY, Decision.NO_BUY)));
+
+        run.run(search);
+
+        assertThat(memory.history("search-1"))
+                .extracting(j -> j.listing().title(), j -> j.verdict().decision(), j -> j.verdict().reason())
+                .containsExactly(
+                        tuple("Zu billig", Decision.NO_BUY, "Preis 50 € < 100 €"),
+                        tuple("Passt", Decision.BUY, "Alle Filter bestanden"),
+                        tuple("Zu teuer", Decision.NO_BUY, "Preis 300 € > 250 €"),
+                        tuple("VB", Decision.BUY, "Alle Filter bestanden"));
+    }
+
+    @Test
+    void phoneFilterRejectionsAreRecordedAndRememberedAsSeen() {
+        var finder = new FakeFinder("phones", List.of(
+                listing("iPhone 13 128 GB", "Akkukapazität: 74 %", 300_00, "weak"),
+                listing("iPhone 13 64 GB", "Akku 91 %", 300_00, "small"),
+                listing("iPhone 13", "Läuft super", 300_00, "unknown")));
+        var notifier = new RecordingNotifier();
+        Search search = phoneSearch(new PhoneFilterSettings(null, 80, Set.of(Storage.GB_128, Storage.GB_256), null),
+                finder, Optional.empty(), notifier);
+
+        run.run(search);
+        run.run(search);
+
+        assertThat(memory.history("search-1"))
+                .extracting(j -> j.listing().externalId(), j -> j.verdict().decision(), j -> j.verdict().reason())
+                .containsExactly(
+                        tuple("weak", Decision.NO_BUY, "Akku 74 % < 80 %"),
+                        tuple("small", Decision.NO_BUY, "Speicher 64 GB nicht erlaubt"),
+                        tuple("unknown", Decision.BUY, "Alle Filter bestanden"));
+        assertThat(notifier.sent).extracting(a -> a.listing().externalId()).containsExactly("unknown");
+    }
+
+    @Test
+    void phoneFilterUsesWhatTheFinderMappedIncludingBatteryRangesAndConditions() {
+        var finder = new FakeFinder("phones", List.of(
+                phoneListing("weak-range", "Akku 90 %", new PhoneAttributes(
+                        Optional.empty(), Optional.of(new Battery(0, 79)), Optional.empty(), Optional.empty())),
+                phoneListing("defect", "Geht nicht an", new PhoneAttributes(
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(PhoneCondition.DEFECT))),
+                phoneListing("battery-defect", "Akku 95 %", new PhoneAttributes(
+                        Optional.empty(), Optional.of(Battery.exact(0)), Optional.empty(), Optional.empty())),
+                phoneListing("good", "Gebraucht", new PhoneAttributes(
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(PhoneCondition.GOOD)))));
+        Search search = phoneSearch(new PhoneFilterSettings(null, 80, null,
+                        Set.of(PhoneCondition.VERY_GOOD, PhoneCondition.GOOD)),
+                finder, Optional.empty(), new RecordingNotifier());
+
+        run.run(search);
+
+        assertThat(memory.history("search-1"))
+                .extracting(j -> j.listing().externalId(), j -> j.verdict().reason())
+                .containsExactly(
+                        tuple("weak-range", "Akku höchstens 79 % < 80 %"),
+                        tuple("defect", "Zustand Defekt nicht erlaubt"),
+                        tuple("battery-defect", "Akku 0 % < 80 %"),
+                        tuple("good", "Alle Filter bestanden"));
+    }
+
+    @Test
+    void phoneAlertsCarryThePhonesLabelledValuesBeforeTheEvaluatorDetails() {
+        var finder = new FakeFinder("phones", List.of(phoneListing("ad-1", "iPhone 13 128GB", "Akku 91 %",
+                new PhoneAttributes(Optional.empty(), Optional.empty(), Optional.of("Blau"), Optional.of(PhoneCondition.VERY_GOOD)))));
+        var evaluator = new FakeEvaluator(l -> new Verdict(Decision.BUY, "gut",
+                List.of(new LabelledValue("Rebuy zahlt", "310 €"))));
+        var notifier = new RecordingNotifier();
+
+        run.run(phoneSearch(PhoneFilterSettings.NONE, finder, Optional.of(slot(evaluator)), notifier));
+
+        assertThat(notifier.sent).singleElement().extracting(Alert::values).asInstanceOf(LIST).containsExactly(
+                new LabelledValue("Speicher", "128 GB"),
+                new LabelledValue("Akku", "91 %"),
+                new LabelledValue("Farbe", "Blau"),
+                new LabelledValue("Zustand", "Sehr gut"),
+                new LabelledValue("Rebuy zahlt", "310 €"));
+    }
+
     // --- helpers -----------------------------------------------------------------------------
+
+    private static Search phoneSearch(PhoneFilterSettings filter, FakeFinder finder,
+                                      Optional<Search.EvaluatorSlot<?>> evaluator, RecordingNotifier notifier) {
+        return new Search("search-1", "iPhone 13", new Search.TypeSlot<>(new PhoneListingType(), filter),
+                List.of(slot(finder)), evaluator, List.of(slot(notifier, Decision.BUY)));
+    }
+
+    static Listing phoneListing(String externalId, String description, PhoneAttributes mapped) {
+        return phoneListing(externalId, "iPhone 13", description, mapped);
+    }
+
+    static Listing phoneListing(String externalId, String title, String description, PhoneAttributes mapped) {
+        return listing(title, description, 300_00, externalId).withAttributes(mapped);
+    }
+
 
     static Listing listing(String title, Integer priceInCents) {
         return listing(title, "Beschreibung von " + title, priceInCents, "id-" + title);
@@ -233,7 +344,8 @@ class SearchRunTest {
     private static Search search(List<FinderSlot<?>> finders,
                                  Optional<Search.EvaluatorSlot<?>> evaluator,
                                  List<NotifierSlot<?>> notifiers) {
-        return new Search("search-1", "PS5 unter 250 €", new GenericListingType(), finders, evaluator, notifiers);
+        return new Search("search-1", "PS5 unter 250 €",
+                new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE), finders, evaluator, notifiers);
     }
 
     private static FinderSlot<?> slot(FakeFinder finder) {
@@ -292,7 +404,7 @@ class SearchRunTest {
         }
 
         @Override
-        public Result find(NoSettings settings, ListingType listingType) {
+        public Result find(NoSettings settings, ListingType<?> listingType) {
             if (failure != null) throw failure;
             return new Result(listings, problems);
         }

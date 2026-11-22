@@ -5,6 +5,7 @@ import com.felarmouche.octo.plugins.kleinanzeigen.KleinanzeigenFinder;
 import com.felarmouche.octo.plugins.kleinanzeigen.KleinanzeigenSettings;
 import com.felarmouche.octo.plugins.telegram.TelegramNotifier;
 import com.felarmouche.octo.plugins.telegram.TelegramSettings;
+import com.felarmouche.octo.types.generic.GenericFilterSettings;
 import com.felarmouche.octo.types.generic.GenericListingType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -30,7 +31,7 @@ public class InCodeSearches {
         this.ps5 = new Search(
                 "ps5-under-250",
                 "PS5 unter 250 €",
-                new GenericListingType(),
+                new Search.TypeSlot<>(new GenericListingType(), GenericFilterSettings.NONE),
                 List.of(new Search.FinderSlot<>(kleinanzeigen,
                         new KleinanzeigenSettings("https://www.kleinanzeigen.de/s-preis::250/ps5/k0", 20))),
                 Optional.empty(),

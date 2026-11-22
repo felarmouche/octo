@@ -5,6 +5,11 @@ import com.felarmouche.octo.core.plugin.Finder;
 import com.felarmouche.octo.infra.html.HtmlLoadException;
 import com.felarmouche.octo.infra.html.HtmlLoader;
 import com.felarmouche.octo.types.generic.GenericListingType;
+import com.felarmouche.octo.types.phone.Battery;
+import com.felarmouche.octo.types.phone.PhoneAttributes;
+import com.felarmouche.octo.types.phone.PhoneCondition;
+import com.felarmouche.octo.types.phone.PhoneListingType;
+import com.felarmouche.octo.types.phone.Storage;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.junit.jupiter.api.Test;
@@ -21,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -33,6 +39,7 @@ class KleinanzeigenFinderTest {
     private static final String AD_1001 = "https://www.kleinanzeigen.de/s-anzeige/ps5-disc-edition-mit-controller/1001-279-1234";
     private static final String AD_1002 = "https://www.kleinanzeigen.de/s-anzeige/playstation-5-digital/1002-279-1234";
     private static final String AD_1003 = "https://www.kleinanzeigen.de/s-anzeige/ps5-slim/1003-279-1234";
+    private static final String PHONE_SEARCH_URL = "https://www.kleinanzeigen.de/s-iphone-13/k0";
 
     private final FixturePages pages = new FixturePages(Map.of(
             SEARCH_URL, "results-page-1.html",
@@ -40,7 +47,11 @@ class KleinanzeigenFinderTest {
             PAGE_3_URL, "results-empty.html",
             AD_1001, "detail-1001.html",
             AD_1002, "detail-1002.html",
-            AD_1003, "detail-1003.html"));
+            AD_1003, "detail-1003.html",
+            PHONE_SEARCH_URL, "results-phones.html",
+            "https://www.kleinanzeigen.de/s-iphone-13/seite:2/k0", "results-empty.html",
+            "https://www.kleinanzeigen.de/s-anzeige/iphone-13-128-gb-blau/2001-173-1234", "detail-2001.html",
+            "https://www.kleinanzeigen.de/s-anzeige/iphone-13-64gb-defekt/2002-173-1234", "detail-2002.html"));
 
     private final KleinanzeigenFinder finder =
             new KleinanzeigenFinder(pages, Clock.fixed(NOW, ZoneOffset.UTC), Duration.ZERO);
@@ -112,6 +123,19 @@ class KleinanzeigenFinderTest {
 
         assertThat(result.listings()).isEmpty();
         assertThat(result.problems()).singleElement().asString().contains(SEARCH_URL);
+    }
+
+    @Test
+    void forPhonesMapsItsOwnFieldsOntoPhoneAttributesWithoutReadingTheText() {
+        List<Listing> phones = finder.find(new KleinanzeigenSettings(PHONE_SEARCH_URL, 10), new PhoneListingType()).listings();
+
+        assertThat(phones).extracting(Listing::attributes).containsExactly(
+                // the "74 %" in the description is left to the phone Listing Type
+                Optional.of(new PhoneAttributes(Optional.of(Storage.GB_128), Optional.of(new Battery(0, 79)),
+                        Optional.of("Blau"), Optional.of(PhoneCondition.VERY_GOOD))),
+                // the "64GB" in the title is left to the phone Listing Type
+                Optional.of(new PhoneAttributes(Optional.empty(), Optional.of(Battery.exact(0)),
+                        Optional.empty(), Optional.of(PhoneCondition.DEFECT))));
     }
 
     // --- helpers -----------------------------------------------------------------------------

@@ -1,9 +1,16 @@
 package com.felarmouche.octo.plugins.kleinanzeigen;
 
 import com.felarmouche.octo.core.domain.Listing;
+import com.felarmouche.octo.core.domain.ListingAttributes;
 import com.felarmouche.octo.core.listingtype.ListingType;
 import com.felarmouche.octo.core.plugin.Finder;
 import com.felarmouche.octo.infra.html.HtmlLoader;
+import com.felarmouche.octo.types.generic.GenericListingType;
+import com.felarmouche.octo.types.phone.Battery;
+import com.felarmouche.octo.types.phone.PhoneAttributes;
+import com.felarmouche.octo.types.phone.PhoneCondition;
+import com.felarmouche.octo.types.phone.PhoneListingType;
+import com.felarmouche.octo.types.phone.Storage;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -17,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -52,7 +60,7 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
     }
 
     @Override
-    public Result find(KleinanzeigenSettings settings, ListingType listingType) {
+    public Result find(KleinanzeigenSettings settings, ListingType<?> listingType) {
         List<Listing> listings = new ArrayList<>();
         List<String> problems = new ArrayList<>();
 
@@ -78,7 +86,7 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
 
                 String url = linkEl.absUrl("href");
                 try {
-                    listings.add(fetchDetails(url, ad.attr("data-adid")));
+                    listings.add(fetchDetails(url, ad.attr("data-adid"), listingType));
                 } catch (RuntimeException e) {
                     log.warn("Skipping Kleinanzeigen ad {}: {}", url, e.getMessage());
                     problems.add("Anzeige " + url + " übersprungen: " + e.getMessage());
@@ -89,7 +97,7 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
         return new Result(listings, problems);
     }
 
-    private Listing fetchDetails(String url, String externalId) {
+    private Listing fetchDetails(String url, String externalId, ListingType<?> listingType) {
         Document doc = pages.load(url);
         String title = doc.select("#viewad-title").text();
         if (title.isBlank()) throw new IllegalStateException("keine Anzeigenseite (kein Titel)");
@@ -109,9 +117,32 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
                 .distinct()
                 .toList();
 
+        Map<String, String> details = parseMarketplaceDetails(doc);
         return new Listing(MARKETPLACE, externalId, title, description, url, images, clock.instant(),
                 price > 0 ? Optional.of(price * 100) : Optional.empty(),
-                parseMarketplaceDetails(doc), Optional.empty());
+                details, attributes(listingType, details));
+    }
+
+    /** Maps only Kleinanzeigen's own fields; text reading is left to the Listing Type. */
+    private static Optional<ListingAttributes> attributes(ListingType<?> listingType, Map<String, String> details) {
+        if (!listingType.id().equals(PhoneListingType.ID)) return Optional.empty();
+        return Optional.of(new PhoneAttributes(
+                Storage.parse(details.get("Speicher (GB)")),
+                Battery.fromHint(details.get("Akkuzustand")),
+                Optional.ofNullable(details.get("Farbe")),
+                phoneCondition(details.get("Zustand"))));
+    }
+
+    private static Optional<PhoneCondition> phoneCondition(String wording) {
+        if (wording == null) return Optional.empty();
+        return Optional.ofNullable(switch (wording.strip().toLowerCase(Locale.ROOT)) {
+            case "neu" -> PhoneCondition.NEW;
+            case "sehr gut" -> PhoneCondition.VERY_GOOD;
+            case "gut" -> PhoneCondition.GOOD;
+            case "in ordnung" -> PhoneCondition.OK;
+            case "defekt" -> PhoneCondition.DEFECT;
+            default -> null;
+        });
     }
 
     private static Map<String, String> parseMarketplaceDetails(Document doc) {
@@ -171,7 +202,7 @@ public class KleinanzeigenFinder implements Finder<KleinanzeigenSettings> {
 
     @Override
     public Set<String> listingTypes() {
-        return Set.of("generic");
+        return Set.of(GenericListingType.ID, PhoneListingType.ID);
     }
 
     @Override
