@@ -164,7 +164,7 @@ Adding a Plugin means writing one settings record and one Plugin class; nothing 
   - **plugins**: one unit per Plugin (kleinanzeigen, rebuy, telegram).
   - **infra**: reusable technical helpers (HTML loading, image loading, AI fallback client).
   - **application**: Searches, the run, scheduling, persistence, registries, the HTTP API.
-- Allowed dependencies: plugins → core, infra · types → core · application → all. Core depends on nothing else in Octo and has no Spring dependency. Nothing depends on application or plugins.
+- Allowed dependencies: plugins → core, infra, types · types → core · application → all. Core depends on nothing else in Octo and has no Spring dependency. Nothing depends on application or plugins.
 - The old `SearchRunner`, `SearchSettings`, `Search` (in-memory), the `XxxI`/`BaseXxx`/per-kind exceptions, `AIConnection` and the unused telegrambots dependency are removed. `WebScraper` moves to infra and throws on failure instead of returning null.
 
 ### Plugin contract (one way for all Plugins)
