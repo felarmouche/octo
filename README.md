@@ -10,7 +10,7 @@ Tests need Docker (Testcontainers): `./gradlew test`.
 
 ## HTTP API
 
-Everything except login and logout needs a session. `POST /api/login` with `{"username": ..., "password": ...}` (the `API_USER` / `API_PASSWORD`) answers `204` and sets an HttpOnly, SameSite=Strict session cookie that lasts 30 days. A failed login answers `401` after a delay of one second. Without a session, every other endpoint answers a plain `401` (no `WWW-Authenticate`, so browsers show no login dialog). Sessions live in memory, so a restart logs you out. See [ADR-0002](docs/adr/0002-own-session-login-instead-of-identity-provider.md).
+Everything except `POST /api/login` needs a session. `POST /api/login` with `{"username": ..., "password": ...}` (the `API_USER` / `API_PASSWORD`) answers `204` and sets an HttpOnly, SameSite=Strict session cookie; after 30 days you log in again. A failed login answers `401` after a delay of one second. Without a session, every other endpoint answers a plain `401` (no `WWW-Authenticate`, so browsers show no login dialog). Sessions live in memory, so a restart logs you out. See [ADR-0002](docs/adr/0002-own-session-login-instead-of-identity-provider.md).
 
 | Endpoint | What it does |
 | --- | --- |

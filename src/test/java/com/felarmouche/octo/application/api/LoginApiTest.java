@@ -5,12 +5,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,6 +25,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Import(TestcontainersConfiguration.class)
 class LoginApiTest {
 
+    private static final int OK = HttpStatus.OK.value();
+    private static final int NO_CONTENT = HttpStatus.NO_CONTENT.value();
+    private static final int UNAUTHORIZED = HttpStatus.UNAUTHORIZED.value();
+
     private final HttpClient http = HttpClient.newHttpClient();
 
     @LocalServerPort
@@ -29,21 +36,19 @@ class LoginApiTest {
 
     @Test
     void afterLoggingInTheSessionCookieOpensTheApi() throws Exception {
-        HttpResponse<String> login = login("octo", "secret");
-        assertThat(login.statusCode()).isEqualTo(204);
+        HttpResponse<String> login = login("octo", "secret", null);
+        assertThat(login.statusCode()).isEqualTo(NO_CONTENT);
 
-        assertThat(get("/api/searches", sessionCookie(login)).statusCode()).isEqualTo(200);
+        assertThat(send(get("/api/searches"), sessionCookie(login)).statusCode()).isEqualTo(OK);
     }
 
     @Test
     void aWrongPasswordOrUserIsRefusedSlowlyWithoutSayingWhichWasWrong() throws Exception {
-        long start = System.nanoTime();
-        HttpResponse<String> wrongPassword = login("octo", "wrong");
-        assertThat(Duration.ofNanos(System.nanoTime() - start)).isGreaterThanOrEqualTo(Duration.ofMillis(900));
-        HttpResponse<String> wrongUser = login("someone", "secret");
+        HttpResponse<String> wrongPassword = timedLogin("octo", "wrong");
+        HttpResponse<String> wrongUser = timedLogin("someone", "secret");
 
-        assertThat(wrongPassword.statusCode()).isEqualTo(401);
-        assertThat(wrongUser.statusCode()).isEqualTo(401);
+        assertThat(wrongPassword.statusCode()).isEqualTo(UNAUTHORIZED);
+        assertThat(wrongUser.statusCode()).isEqualTo(UNAUTHORIZED);
         assertThat(wrongPassword.body()).isEqualTo(wrongUser.body()).contains("\"errors\"");
         assertThat(wrongPassword.headers().firstValue("WWW-Authenticate")).isEmpty();
         assertThat(wrongPassword.headers().firstValue("Set-Cookie")).isEmpty();
@@ -51,20 +56,20 @@ class LoginApiTest {
 
     @Test
     void theSessionEndpointTellsWhetherTheUserIsLoggedInUntilLogout() throws Exception {
-        assertThat(get("/api/session", null).statusCode()).isEqualTo(401);
-        String cookie = sessionCookie(login("octo", "secret"));
-        assertThat(get("/api/session", cookie).statusCode()).isEqualTo(200);
+        assertThat(send(get("/api/session"), null).statusCode()).isEqualTo(UNAUTHORIZED);
+        String cookie = sessionCookie(login("octo", "secret", null));
+        assertThat(send(get("/api/session"), cookie).statusCode()).isEqualTo(OK);
 
-        HttpResponse<String> logout = post("/api/logout", cookie);
+        HttpResponse<String> logout = send(post("/api/logout"), cookie);
 
-        assertThat(logout.statusCode()).isEqualTo(204);
-        assertThat(get("/api/session", cookie).statusCode()).isEqualTo(401);
-        assertThat(get("/api/searches", cookie).statusCode()).isEqualTo(401);
+        assertThat(logout.statusCode()).isEqualTo(NO_CONTENT);
+        assertThat(send(get("/api/session"), cookie).statusCode()).isEqualTo(UNAUTHORIZED);
+        assertThat(send(get("/api/searches"), cookie).statusCode()).isEqualTo(UNAUTHORIZED);
     }
 
     @Test
     void theSessionCookieIsHiddenFromScriptsSameSiteOnlyAndLastsThirtyDays() throws Exception {
-        String cookie = setCookie(login("octo", "secret"));
+        String cookie = setCookie(login("octo", "secret", null));
 
         assertThat(cookie).containsIgnoringCase("HttpOnly")
                 .containsIgnoringCase("SameSite=Strict")
@@ -74,47 +79,51 @@ class LoginApiTest {
 
     @Test
     void loggingInWithAnExistingSessionGivesANewSessionId() throws Exception {
-        String first = sessionCookie(login("octo", "secret"));
+        String first = sessionCookie(login("octo", "secret", null));
 
         String second = sessionCookie(login("octo", "secret", first));
 
         assertThat(second).isNotEqualTo(first);
-        assertThat(get("/api/session", first).statusCode()).isEqualTo(401);
-        assertThat(get("/api/session", second).statusCode()).isEqualTo(200);
+        assertThat(send(get("/api/session"), first).statusCode()).isEqualTo(UNAUTHORIZED);
+        assertThat(send(get("/api/session"), second).statusCode()).isEqualTo(OK);
     }
 
     @Test
-    void withoutASessionTheApiAnswersAPlain401AndBasicNoLongerWorks() throws Exception {
-        HttpResponse<String> anonymous = get("/api/searches", null);
-        HttpResponse<String> basic = http.send(HttpRequest.newBuilder(uri("/api/searches"))
-                .header("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString("octo:secret".getBytes()))
-                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    void withoutASessionEverythingButLoginIsAPlain401WithoutCreatingASession() throws Exception {
+        String basic = "Basic " + Base64.getEncoder().encodeToString("octo:secret".getBytes(StandardCharsets.UTF_8));
+        for (HttpRequest.Builder request : new HttpRequest.Builder[]{
+                get("/api/searches"), post("/api/logout"), get("/api/no-such-endpoint"),
+                get("/api/searches").header("Authorization", basic)}) {
+            HttpResponse<String> response = send(request, null);
 
-        assertThat(anonymous.statusCode()).isEqualTo(401);
-        assertThat(anonymous.headers().firstValue("WWW-Authenticate")).isEmpty();
-        assertThat(basic.statusCode()).isEqualTo(401);
+            assertThat(response.statusCode()).isEqualTo(UNAUTHORIZED);
+            assertThat(response.headers().firstValue("WWW-Authenticate")).isEmpty();
+            assertThat(response.headers().firstValue("Set-Cookie")).isEmpty();
+        }
     }
 
-    private HttpResponse<String> post(String path, String cookie) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).POST(HttpRequest.BodyPublishers.noBody());
-        if (cookie != null) request.header("Cookie", cookie);
-        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
-    }
-
-    private HttpResponse<String> login(String user, String password) throws Exception {
-        return login(user, password, null);
+    private HttpResponse<String> timedLogin(String user, String password) throws Exception {
+        long start = System.nanoTime();
+        HttpResponse<String> response = login(user, password, null);
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isGreaterThanOrEqualTo(Duration.ofMillis(900));
+        return response;
     }
 
     private HttpResponse<String> login(String user, String password, String cookie) throws Exception {
         String body = "{\"username\":\"%s\",\"password\":\"%s\"}".formatted(user, password);
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri("/api/login")).header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(body));
-        if (cookie != null) request.header("Cookie", cookie);
-        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+        return send(HttpRequest.newBuilder(uri("/api/login")).header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)), cookie);
     }
 
-    private HttpResponse<String> get(String path, String cookie) throws Exception {
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).GET();
+    private HttpRequest.Builder get(String path) {
+        return HttpRequest.newBuilder(uri(path)).GET();
+    }
+
+    private HttpRequest.Builder post(String path) {
+        return HttpRequest.newBuilder(uri(path)).POST(HttpRequest.BodyPublishers.noBody());
+    }
+
+    private HttpResponse<String> send(HttpRequest.Builder request, String cookie) throws Exception {
         if (cookie != null) request.header("Cookie", cookie);
         return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }

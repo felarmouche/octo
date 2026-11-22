@@ -506,7 +506,6 @@ class SearchApiTest {
         return tools.jackson.databind.json.JsonMapper.shared().readTree(body).get("id").asString();
     }
 
-
     private static Listing listing(String title, int price) {
         return new Listing("fake", title, title, "", "https://example.org/" + title.hashCode(), List.of(),
                 Instant.parse("2026-11-22T10:00:00Z"), java.util.Optional.of(price), Map.of(), java.util.Optional.empty());
