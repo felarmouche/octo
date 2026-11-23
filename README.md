@@ -4,7 +4,7 @@ Octo watches second-hand marketplaces for underpriced offers. Each **Search** ru
 
 ## Running
 
-`docker compose up --build` starts Octo and PostgreSQL. Secrets come from the environment or a local `.env` (never committed): `API_USER`, `API_PASSWORD`, `GEMINI_API_KEY`. For running from the IDE, `docker compose up -d postgres` starts only the database.
+`docker compose up --build` starts Octo, PostgreSQL and the frontend, which is built from `../octo_frontend` (clone both repos side by side) and served on port `${OCTO_PORT:-80}`; see its README for deploying to the Raspberry Pi. Secrets come from the environment or a local `.env` (never committed): `API_USER`, `API_PASSWORD`, `GEMINI_API_KEY`. For running from the IDE, `docker compose up -d postgres` starts only the database.
 
 Tests need Docker (Testcontainers): `./gradlew test`.
 
