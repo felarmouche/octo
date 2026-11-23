@@ -231,6 +231,12 @@ class DiscoveryApiTest {
                         Map.of("const", "NOT_EVALUATABLE", "title", "Nicht bewertbar")));
     }
 
+    @Test
+    void aNotifierReportsBuyUnlessChosenOtherwise() {
+        assertThat(get("/api/search-schema")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.notifierDecisions.default", v -> v.assertThat().asList().containsExactly("BUY"));
+    }
+
     private MvcTestResult get(String uri) {
         MockHttpSession session = (MockHttpSession) mvc.post().uri("/api/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"octo\",\"password\":\"secret\"}").exchange().getRequest().getSession(false);

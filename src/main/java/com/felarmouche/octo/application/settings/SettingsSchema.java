@@ -22,6 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
 import java.lang.reflect.Method;
 import java.lang.reflect.RecordComponent;
 import java.time.DayOfWeek;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -91,12 +92,13 @@ public class SettingsSchema {
         return Integer.MAX_VALUE;
     }
 
-    /** A number or boolean default as such, not as the string it is written as in the annotation. */
+    /** A number, boolean or collection default as such, not as the string it is written as in the annotation. */
     private static Object typedDefault(FieldScope field) {
         Schema schema = field.getAnnotationConsideringFieldAndGetter(Schema.class);
         if (schema == null || schema.defaultValue().isEmpty()) return null;
         Class<?> type = field.getType().getErasedType();
-        boolean literal = type.isPrimitive() || Number.class.isAssignableFrom(type) || type == Boolean.class;
+        boolean literal = type.isPrimitive() || Number.class.isAssignableFrom(type) || type == Boolean.class
+                || Collection.class.isAssignableFrom(type);
         return literal ? JSON.readTree(schema.defaultValue()) : schema.defaultValue();
     }
 

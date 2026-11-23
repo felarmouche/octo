@@ -32,7 +32,7 @@ services:
       API_USER: ${API_USER:-octo}
       API_PASSWORD: ${API_PASSWORD:?set API_PASSWORD for the API user}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080" # localhost only: from outside, the API is reached through the frontend's origin
     restart: unless-stopped
 
   frontend:

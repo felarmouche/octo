@@ -42,11 +42,11 @@ public record SearchDefinition(
     /**
      * A Notifier, the Decisions it reports, and its settings.
      *
-     * @param decisions at least one; its schema is served as the search-schema's {@code notifierDecisions}
+     * @param decisions at least one, BUY unless chosen otherwise; its schema is served as the search-schema's {@code notifierDecisions}
      */
     public record NotifierSlot(
             String plugin,
-            @Size(min = 1) @Schema(title = "Meldet") Set<Decision> decisions,
+            @Size(min = 1) @Schema(title = "Meldet", defaultValue = "[\"BUY\"]") Set<Decision> decisions,
             JsonNode settings) {
         public NotifierSlot {
             decisions = decisions == null ? Set.of() : Set.copyOf(decisions);
